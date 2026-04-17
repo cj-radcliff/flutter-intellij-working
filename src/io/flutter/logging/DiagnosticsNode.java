@@ -501,7 +501,12 @@ public class DiagnosticsNode {
     if (value instanceof JsonNull) {
       return defaultValue;
     }
+    try {
     return DiagnosticsTreeStyle.valueOf(value.getAsString());
+  }
+    catch (IllegalArgumentException ignore) {
+      return defaultValue;
+    }
   }
 
   /**
