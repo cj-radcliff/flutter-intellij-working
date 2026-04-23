@@ -30,6 +30,8 @@ repositories {
   mavenCentral()
   maven("https://cache-redirector.jetbrains.com/packages.jetbrains.team/maven/p/ij/intellij-ide-starter")
   maven("https://mvnrepository.com/artifact/com.jetbrains.intellij.tools/ide-starter-driver")
+  maven ( url = "https://packages.jetbrains.team/maven/p/ij/intellij-dependencies" )
+
   intellijPlatform {
     defaultRepositories()
   }
@@ -44,6 +46,7 @@ plugins {
   alias(libs.plugins.kotlin.jvm) // Kotlin support
   alias(libs.plugins.changelog) // Gradle Changelog Plugin
   alias(libs.plugins.kover)
+  id("org.jetbrains.intellij.ui-test-robot") version "0.11.20"
   idea // IntelliJ IDEA support
 }
 
@@ -112,6 +115,10 @@ kotlin {
 //    @Suppress("UnstableApiUsage")
 //    vendor = JvmVendorSpec.JETBRAINS
 //  }
+}
+
+robot {
+    intellijVersion.set(ideaVersion)
 }
 
 var javaCompatibilityVersion: JavaVersion
