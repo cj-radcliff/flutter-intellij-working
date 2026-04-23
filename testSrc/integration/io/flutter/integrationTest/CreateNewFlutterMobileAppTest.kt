@@ -44,13 +44,24 @@ class CreateNewFlutterMobileAppTest {
                 createNewProjectButton.click()
                 newProjectDialog {
                     chooseProjectType("Flutter")
+                    
+                    // Assert that the Flutter SDK text box is present and not empty.
+                    Assertions.assertTrue(sdkPathTextBox.present(), "Flutter SDK path text box should be visible")
+                    val texts = sdkPathTextBox.getAllTexts()
+                    Assertions.assertTrue(texts.isNotEmpty() && texts.first().text.isNotBlank(), "Flutter SDK path should not be blank")
 
                     // 4. Select Next.
                     nextButton.click()
 
                     // Assert that the new project dialog is open and contains the expected fields.
-                    Assertions.assertTrue(x("//div[text()='Project name:']").present(), "Project name field should be visible")
-                    Assertions.assertTrue(x("//div[text()='Project location:']").present(), "Project location field should be visible")
+                    Assertions.assertTrue(projectNameLabel.present(), "Project name field should be visible")
+                    Assertions.assertTrue(projectLocationLabel.present(), "Project location field should be visible")
+
+                    // 5. Name the project.
+                    projectNameInput.click()
+                    keyboard {
+                        typeText("my_flutter_app")
+                    }
                 }
             }
             assert(false) { "This test is expected to fail and serve as a placeholder for UI interaction implementation." }
