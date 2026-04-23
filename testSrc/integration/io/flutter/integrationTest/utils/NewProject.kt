@@ -28,7 +28,7 @@ fun Finder.newProjectDialog(action: NewProjectDialogUI.() -> Unit) {
   //   allowing access to its properties and functions.
   //
   // The found dialog component is then passed to the `action` lambda,
-  // which contains the test steps to perform within the dialog.
+  //   which contains the test steps to perform within the dialog.
   x("//div[@title='New Project']", NewProjectDialogUI::class.java).action()
 }
 
@@ -43,6 +43,10 @@ open class NewProjectDialogUI(data: ComponentData) : UiComponent(data) {
     projectTypeList.waitOneText(projectType).click()
   }
 
+  fun dumpWidgetTree() {
+   // println(driver.source())
+  }
+
   // Locates the list of project types within the dialog.
   // The xQuery targets a component with the specific class "JBList".
   private val projectTypeList = x("//div[@class='JBList']")
@@ -54,6 +58,18 @@ open class NewProjectDialogUI(data: ComponentData) : UiComponent(data) {
   // Locates the "Create" button in the dialog.
   // The xQuery finds a button component with the visible text "Create".
   val createButton = x("//div[@text='Create']")
+
+  // Locates the "Project name" label.
+  val projectNameLabel = x("//div[text()='Project name:']")
+
+  // Locates the "Project name" input field.
+  val projectNameInput = x("//div[@class='LabeledComponent' and ./div[text()='Project name:']]//div[@class='ExtendableTextField']")
+
+  // Locates the "Project location" label.
+  val projectLocationLabel = x("//div[text()='Project location:']")
+
+  // Locates the Flutter SDK path text field.
+  val sdkPathTextBox = x("//div[@class='ComboboxWithBrowseButton' and ./div[text()='Flutter SDK path:']]//div[@class='JComboBox']")
 }
 
 /**
@@ -153,4 +169,3 @@ fun deleteFlutterProject(
     }
   }
 }
-
