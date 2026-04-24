@@ -1,6 +1,8 @@
 package io.flutter.integrationTest
 
 import com.intellij.driver.sdk.ui.components.common.welcomeScreen
+import com.intellij.driver.sdk.ui.components.elements.checkBox
+import com.intellij.driver.sdk.wait
 import com.intellij.ide.starter.driver.engine.BackgroundRun
 import com.intellij.ide.starter.driver.engine.runIdeWithDriver
 import com.intellij.ide.starter.junit5.config.UseLatestDownloadedIdeBuild
@@ -11,6 +13,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 @Tag("ui")
 @ExtendWith(UseLatestDownloadedIdeBuild::class)
@@ -46,9 +50,9 @@ class CreateNewFlutterMobileAppTest {
                     chooseProjectType("Flutter")
                     
                     // Assert that the Flutter SDK text box is present and not empty.
-                    Assertions.assertTrue(sdkPathTextBox.present(), "Flutter SDK path text box should be visible")
-                    val texts = sdkPathTextBox.getAllTexts()
-                    Assertions.assertTrue(texts.isNotEmpty() && texts.first().text.isNotBlank(), "Flutter SDK path should not be blank")
+                    // This relies on the framework's internal SDK path validation which
+                    // makes the 'Next' button enabled if valid.
+                    Assertions.assertTrue(nextButton.isEnabled(), "Flutter SDK path should be set and Next button enabled.")
 
                     // 4. Select Next.
                     nextButton.click()
@@ -58,13 +62,50 @@ class CreateNewFlutterMobileAppTest {
                     Assertions.assertTrue(projectLocationLabel.present(), "Project location field should be visible")
 
                     // 5. Name the project.
-                    projectNameInput.click()
+                    val testProjectName = "it_test_project_${System.currentTimeMillis()}"
+                    projectNameInput.doubleClick()
                     keyboard {
-                        typeText("my_flutter_app")
+                        typeText(testProjectName)
                     }
+
+                    // 6. Ensure that Android and IOS platforms are selected
+                    Assertions.assertNotNull(androidRadioButton)
+
+                    Assertions.assertTrue(androidRadioButton.isSelected())
+                    Assertions.assertTrue(iosRadioButton.isSelected())
+
+                    linuxButton.click()
+                    macOsButton.click()
+                    webButton.click()
+                    windowsButton.click()
+                    Assertions.assertTrue(!linuxButton.isSelected())
+
+                    // 7. Add a description.
+                    Assertions.assertTrue(descriptionLabel.present(), "Description field should be visible")
+                    descriptionInput.doubleClick()
+                    // The driver needs a method to get the UI component hierarchy for debugging.
+                    // This is a placeholder for that functionality.
+                 //   println(descriptionInput)
+                    keyboard {
+                        typeText("This is a test Flutter application created by the integration test bot.")
+                    }
+
+                    // 8. Ensure the application type is selected for the project type
+                    // Todo Fix this
+                    //Assertions.assertTrue(applicationTypeDropDown.getSelectedItem() == "Application")
+                    
+                    // 9. Ensure that the android language is Kotlin
+                    Assertions.assertTrue(kotlinRadioButton.isSelected)
+
+                    // 10. Click create
+                    createButton.click()
+
+
+
+                    wait(30.seconds)
                 }
+                
             }
-            assert(false) { "This test is expected to fail and serve as a placeholder for UI interaction implementation." }
         }
     }
 }

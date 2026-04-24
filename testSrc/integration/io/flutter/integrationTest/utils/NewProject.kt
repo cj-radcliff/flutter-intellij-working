@@ -10,6 +10,13 @@ import com.intellij.driver.sdk.ui.Finder
 import com.intellij.driver.sdk.ui.components.ComponentData
 import com.intellij.driver.sdk.ui.components.UiComponent
 import com.intellij.driver.sdk.ui.components.common.welcomeScreen
+import com.intellij.driver.sdk.ui.components.elements.JComboBoxUiComponent
+import com.intellij.driver.sdk.ui.components.elements.actionButtonByXpath
+import com.intellij.driver.sdk.ui.components.elements.checkBox
+import com.intellij.driver.sdk.ui.components.elements.comboBox
+import com.intellij.driver.sdk.ui.components.elements.radioButton
+import com.intellij.driver.sdk.ui.components.elements.textField
+import com.intellij.driver.sdk.ui.xQuery
 import com.intellij.driver.sdk.wait
 import com.intellij.ide.starter.driver.engine.BackgroundRun
 import org.junit.jupiter.api.fail
@@ -57,19 +64,36 @@ open class NewProjectDialogUI(data: ComponentData) : UiComponent(data) {
 
   // Locates the "Create" button in the dialog.
   // The xQuery finds a button component with the visible text "Create".
-  val createButton = x("//div[@text='Create']")
+  val createButton =  actionButtonByXpath(xQuery { byVisibleText("Create") })
 
   // Locates the "Project name" label.
-  val projectNameLabel = x("//div[text()='Project name:']")
+  val projectNameLabel = actionButtonByXpath(xQuery { byVisibleText("Project name:") })
 
   // Locates the "Project name" input field.
-  val projectNameInput = x("//div[@class='LabeledComponent' and ./div[text()='Project name:']]//div[@class='ExtendableTextField']")
+  //val projectNameInput = x("//div[@class='LabeledComponent' and ./div[text()='Project name:']]//div[@class='ExtendableTextField']")
+  val projectNameInput = actionButtonByXpath(xQuery { byVisibleText("untitled") })
 
   // Locates the "Project location" label.
-  val projectLocationLabel = x("//div[text()='Project location:']")
+  val projectLocationLabel = actionButtonByXpath(xQuery { byVisibleText("Project location:") })
+
 
   // Locates the Flutter SDK path text field.
-  val sdkPathTextBox = x("//div[@class='ComboboxWithBrowseButton' and ./div[text()='Flutter SDK path:']]//div[@class='JComboBox']")
+  //val sdkPathTextBox = x("//div[@class='ComboboxWithBrowseButton' and ./div[text()='Flutter SDK path:']]//div[@class='JComboBox']")
+  val sdkPathTextBox = actionButtonByXpath(xQuery { byVisibleText("Flutter SDK path:") })
+
+  val androidRadioButton = checkBox(xQuery { byVisibleText("Android") })
+  val iosRadioButton = checkBox(xQuery { byVisibleText("iOS") })
+  val linuxButton = checkBox(xQuery { byVisibleText("Linux") })
+  val macOsButton  = checkBox(xQuery { byVisibleText("MacOS") })
+  val webButton  = checkBox(xQuery { byVisibleText("Web") })
+  val windowsButton  = checkBox(xQuery { byVisibleText("Windows") })
+
+  val descriptionLabel = actionButtonByXpath(xQuery { byVisibleText("Description:") })
+  val descriptionInput = textField(xQuery { byVisibleText("A new Flutter project.")})
+
+  val applicationTypeDropDown = comboBox(xQuery { byType("JComboBoxUI" ) })
+
+  val kotlinRadioButton = radioButton(xQuery { byVisibleText("Kotlin") })
 }
 
 /**

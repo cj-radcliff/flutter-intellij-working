@@ -17,7 +17,8 @@
 
 5.  **Name the project.**
     *   Enter a project name in the "Project name" field.
-
+    *   Project name should be unique: use it_test_project_<current_timestamp>
+    * 
 6.  **Ensure that Android and iOS platforms are selected.**
     *   **Assertion:** Assert that the "Android" platform checkbox is selected.
     *   **Assertion:** Assert that the "iOS" platform checkbox is selected.
