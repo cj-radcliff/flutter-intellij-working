@@ -77,9 +77,14 @@ val untilBuildInput = providers.gradleProperty("untilBuild").get()
 val javaVersion = providers.gradleProperty("javaVersion").get()
 group = "io.flutter"
 
+val androidStudioVersion = providers.gradleProperty("androidStudioVersion").get()
+
+
 // For debugging purposes:
 println("flutterPluginVersion: $flutterPluginVersion")
 println("ideaVersion: $ideaVersion")
+println("androidStudioVersion: $androidStudioVersion")
+
 println("dartPluginVersion: $dartPluginVersion")
 println("sinceBuild: $sinceBuildInput")
 println("untilBuild: $untilBuildInput")
@@ -171,13 +176,15 @@ sourceSets {
     )
   }
 
-  create("integration", Action<SourceSet> {
+  create("integration") {
     java.srcDirs("testSrc/integration")
     kotlin.srcDirs("testSrc/integration")
     resources.srcDirs("testSrc/integration")
-    compileClasspath += sourceSets["main"].output + sourceSets["test"].output
-    runtimeClasspath += sourceSets["main"].output + sourceSets["test"].output
-  })
+    compileClasspath += sourceSets.main.get().output
+    runtimeClasspath += sourceSets.main.get().output
+    compileClasspath += sourceSets.test.get().compileClasspath
+    runtimeClasspath += sourceSets.test.get().runtimeClasspath
+  }
 }
 
 // Configure IntelliJ IDEA to recognize integration as test sources
@@ -202,7 +209,9 @@ dependencies {
     // https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html#default-target-platforms
     // Android Studio versions can be found at: https://plugins.jetbrains.com/docs/intellij/android-studio-releases-list.html
     try {
-      androidStudio(ideaVersion)
+      androidStudio(androidStudioVersion)
+      //intellijIdea(ideaVersion)
+
     } catch (e: Exception) {
       throw GradleException(
         "Failed to resolve Android Studio / IDEA download URL. This is likely due to a network issue blocking the download URL. Please check your internet connection or VPN.",
@@ -265,6 +274,7 @@ dependencies {
 }
 
 intellijPlatform {
+  sourceSets.add(sourceSets.getByName("integration"))
   pluginConfiguration {
     version = flutterPluginVersion
     ideaVersion {
@@ -389,8 +399,13 @@ tasks {
 // https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-faq.html#how-to-check-the-latest-available-eap-release
 tasks {
   printProductsReleases {
+<<<<<<< HEAD
     channels = listOf(ProductRelease.Channel.RELEASE, ProductRelease.Channel.EAP)
     types = listOf(IntelliJPlatformType.IntellijIdeaCommunity, IntelliJPlatformType.IntellijIdeaUltimate, IntelliJPlatformType.AndroidStudio)
+=======
+    channels = listOf(ProductRelease.Channel.EAP)
+    types = listOf(IntelliJPlatformType.IntellijIdeaUltimate)
+>>>>>>> b7dd97050 (Attempting to fix the integration test)
     untilBuild = provider { null }
 
     doLast {

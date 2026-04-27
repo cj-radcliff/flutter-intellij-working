@@ -37,38 +37,29 @@ import java.nio.file.Paths
  */
 class Setup {
 
-  /**
-   * Custom GlobalPaths implementation that points to the project's build directory.
-   * This ensures all test artifacts are stored within the project structure.
-   */
-  class TemplatePaths : GlobalPaths(Git.getRepoRoot().resolve("build"))
-
-
   companion object {
 
-    init {
-      // Configure dependency injection to use our custom paths
-      di = DI.Companion {
-        extend(di)
-        bindSingleton<GlobalPaths>(overrides = true) { TemplatePaths() }
-      }
-    }
-
     fun setupTestContextIC(hyphenateWithClass: String, projectInfoSpec: ProjectInfoSpec = NoProject): IDETestContext {
+
+     // return Starter.newContext(testName = "testExample", TestCase(IdeProductProvider.IC, projectInfo = NoProject).withVersion("2025.3"));
+
+
       return setupTestContext(
         "", IdeProductProvider.IC.copy(
           // TODO(team) should the version be fetched from some setting, i.e. System.getProperty("uiPlatformBuildVersion")
-          buildNumber = "252.23892.409",
-          buildType = BuildType.RELEASE.type
+          version = "2025.2.6.1",
+          buildType = BuildType.RELEASE.type,
         ), projectInfoSpec
       )
+
+
     }
 
     fun setupTestContextUE(hyphenateWithClass: String, projectInfoSpec: ProjectInfoSpec = NoProject): IDETestContext {
       return setupTestContext(
         "", IdeProductProvider.IU.copy(
           // TODO(team) should the version be fetched from some setting, i.e. System.getProperty("uiPlatformBuildVersion")
-          buildNumber = "252.23892.409",
+          buildNumber = "252.27397.28",
           buildType = BuildType.RELEASE.type
         ), projectInfoSpec
       )
