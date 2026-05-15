@@ -19,7 +19,7 @@ import com.intellij.ide.starter.driver.engine.runIdeWithDriver
 import com.intellij.ide.starter.junit5.config.UseLatestDownloadedIdeBuild
 import io.flutter.integrationTest.utils.FlutterTestSdk
 import io.flutter.integrationTest.utils.newProjectWelcomeScreen
-import org.gradle.internal.impldep.org.junit.Ignore
+import org.junit.Ignore
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
