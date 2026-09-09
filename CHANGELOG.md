@@ -5,10 +5,34 @@
 ### Changed
 
 ### Removed
+
+### Fixed
+
+## 96.0.0
+
+### Added
+
+### Changed
+
+### Removed
+
+### Fixed
+- Prevent untrusted project Git error during project creation when selecting a Flutter SDK. (#9099)
+- Issue with saving the Flutter SDK path in Settings. (#9074)
+
+## 95.0.0
+
+### Added
+
+### Changed
+- Removed upper build constraint (`untilBuild`) for open-ended platform compatibility. (#9063)
+
+### Removed
 - Support for platform version 2025.1.
 - Bazel run and test configurations.
 
 ### Fixed
+- IDE freeze when applying Flutter SDK path changes in Settings. (#9058)
 
 ## 94.0.0
 
