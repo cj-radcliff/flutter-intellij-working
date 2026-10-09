@@ -24,14 +24,12 @@ import com.intellij.openapi.roots.libraries.LibraryTablesRegistrar;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.openapi.vcs.VcsException;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.util.ui.EDT;
 import com.jetbrains.lang.dart.sdk.DartSdk;
-import git4idea.config.GitExecutableManager;
 import io.flutter.FlutterBundle;
 import io.flutter.FlutterUtils;
 import io.flutter.dart.DartPlugin;
@@ -118,7 +116,11 @@ public class FlutterSdk {
       return null;
     }
 
-    final String dartPath = dartSdk.getHomePath();
+    final String homePath = dartSdk.getHomePath();
+    if (homePath == null) {
+      return null;
+    }
+    final String dartPath = FileUtil.toSystemIndependentName(homePath);
     if (!dartPath.endsWith(DART_SDK_SUFFIX)) {
       return null;
     }
@@ -288,11 +290,6 @@ public class FlutterSdk {
   @NotNull
   public FlutterCommand flutterConfig(String... additionalArgs) {
     return new FlutterCommand(this, getHome(), FlutterCommand.Type.CONFIG, additionalArgs);
-  }
-
-  @NotNull
-  public FlutterCommand flutterChannel() {
-    return new FlutterCommand(this, getHome(), FlutterCommand.Type.CHANNEL);
   }
 
   @NotNull
@@ -578,36 +575,6 @@ public class FlutterSdk {
   @Nullable
   public String getDartSdkPath() {
     return FlutterSdkUtil.pathToDartSdk(getHomePath());
-  }
-
-  @Nullable
-  @NonNls
-  public FlutterSdkChannel queryFlutterChannel(boolean useCachedValue) {
-    if (useCachedValue) {
-      final String channel = cachedConfigValues.get("channel");
-      if (channel != null) {
-        return FlutterSdkChannel.fromText(channel);
-      }
-    }
-
-    final VirtualFile dir = LocalFileSystem.getInstance().findFileByPath(getHomePath());
-    assert dir != null;
-    String branch;
-    try {
-      branch = git4idea.light.LightGitUtilKt.getLocation(dir, GitExecutableManager.getInstance().getExecutable((Project)null));
-    }
-    catch (VcsException e) {
-      final String stdout = returnOutputOfQuery(flutterChannel());
-      if (stdout == null) {
-        branch = "unknown";
-      }
-      else {
-        branch = FlutterSdkChannel.parseChannel(stdout);
-      }
-    }
-
-    cachedConfigValues.put("channel", branch);
-    return FlutterSdkChannel.fromText(branch);
   }
 
   @NotNull

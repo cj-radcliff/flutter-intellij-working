@@ -5,10 +5,47 @@
 ### Changed
 
 ### Removed
+- Legacy Dart Analysis Server URI mapping during debugging. (#9149)
+
+### Fixed
+
+## 97.0.0
+
+### Added
+
+### Changed
+
+### Removed
+
+### Fixed
+- Opening the iOS Simulator with Xcode 27, which replaced `Simulator.app` with `DeviceHub.app`. (#9126)
+- `IndexOutOfBoundsException` in `FlutterColorProvider`. (#9091)
+
+## 96.0.0
+
+### Added
+
+### Changed
+
+### Removed
+
+### Fixed
+- Prevent untrusted project Git error during project creation when selecting a Flutter SDK. (#9099)
+- Issue with saving the Flutter SDK path in Settings. (#9074)
+
+## 95.0.0
+
+### Added
+
+### Changed
+- Removed upper build constraint (`untilBuild`) for open-ended platform compatibility. (#9063)
+
+### Removed
 - Support for platform version 2025.1.
 - Bazel run and test configurations.
 
 ### Fixed
+- IDE freeze when applying Flutter SDK path changes in Settings. (#9058)
 
 ## 94.0.0
 
