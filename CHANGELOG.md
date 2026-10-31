@@ -3,12 +3,67 @@
 ### Added
 
 ### Changed
+- Centralizing file path logging into `PluginLogger`. (#8707)
+
+### Removed
+- Eager legacy Dart Analysis Server startup when enabling Dart support for Gradle modules. (#9177)
+
+### Fixed
+
+## 98.0.0
+
+### Added
+
+### Changed
+- Migrated test detection from `FlutterOutline` to Dart PSI. (#9159)
+- Avoiding `--no-color` on Flutter commands run from the plugin, and keeping their console command lines folded. (#9161)
+- Specifying background action update thread (`ActionUpdateThread.BGT`) across Flutter actions for modern IntelliJ Platform compliance. (#9188)
+
+### Removed
+- Legacy Dart Analysis Server URI mapping during debugging. (#9149)
+- Support for Flutter SDK versions older than 3.22.2. (#9189)
+
+### Fixed
+- Empty Flutter SDK dropdown in the New Project wizard when switching to Flutter after starting the wizard on another language. (#9110)
+- Process handlers of terminated apps are no longer kept until the project closes. (#9175)
+
+## 97.0.0
+
+### Added
+
+### Changed
+
+### Removed
+
+### Fixed
+- Opening the iOS Simulator with Xcode 27, which replaced `Simulator.app` with `DeviceHub.app`. (#9126)
+- `IndexOutOfBoundsException` in `FlutterColorProvider`. (#9091)
+
+## 96.0.0
+
+### Added
+
+### Changed
+
+### Removed
+
+### Fixed
+- Prevent untrusted project Git error during project creation when selecting a Flutter SDK. (#9099)
+- Issue with saving the Flutter SDK path in Settings. (#9074)
+
+## 95.0.0
+
+### Added
+
+### Changed
+- Removed upper build constraint (`untilBuild`) for open-ended platform compatibility. (#9063)
 
 ### Removed
 - Support for platform version 2025.1.
 - Bazel run and test configurations.
 
 ### Fixed
+- IDE freeze when applying Flutter SDK path changes in Settings. (#9058)
 
 ## 94.0.0
 

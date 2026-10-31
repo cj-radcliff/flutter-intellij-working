@@ -29,10 +29,8 @@ import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.messages.MessageBusConnection;
-import de.roderick.weberknecht.WebSocketException;
 import io.flutter.android.IntelliJAndroidSdk;
 import io.flutter.dart.DtdUtils;
-import io.flutter.dart.FlutterDartAnalysisServer;
 import io.flutter.devtools.DevToolsExtensionsViewFactory;
 import io.flutter.devtools.DevToolsUtils;
 import io.flutter.devtools.RemainingDevToolsViewFactory;
@@ -151,7 +149,7 @@ public class FlutterInitializer extends FlutterProjectActivity {
         }
         return null;
       })
-      .expireWith(FlutterDartAnalysisServer.getInstance(project))
+      .expireWith(FlutterProjectDisposable.getInstance(project))
       .finishOnUiThread(ModalityState.defaultModalityState(), result -> {
         edtInitialization(finalHasFlutterModule, project);
       })
@@ -234,7 +232,7 @@ public class FlutterInitializer extends FlutterProjectActivity {
   private void setUpDtdAnalytics(Project project) {
     if (project == null) return;
     FlutterSdk sdk = FlutterSdk.getFlutterSdk(project);
-    if (sdk == null || !sdk.getVersion().canUseDtd()) return;
+    if (sdk == null) return;
     //Thread t1 = new Thread(() -> {
     //  UnifiedAnalytics unifiedAnalytics = new UnifiedAnalytics(project);
     //   TODO(helin24): Turn on after adding some unified analytics reporting.
@@ -245,7 +243,7 @@ public class FlutterInitializer extends FlutterProjectActivity {
 
   private void setUpThemeChangeNotifications(@NotNull Project project) {
     FlutterSdk sdk = FlutterSdk.getFlutterSdk(project);
-    if (sdk == null || !sdk.getVersion().canUseDtd()) return;
+    if (sdk == null) return;
     Thread t1 = new Thread(() -> {
       if (busSubscribed) return;
       final MessageBusConnection connection = ApplicationManager.getApplication().getMessageBus().connect();
@@ -313,7 +311,9 @@ public class FlutterInitializer extends FlutterProjectActivity {
               }
             });
           }
-          catch (WebSocketException e) {
+          // The Dart plugin changed its checked WebSocket exception type when it replaced
+          // Weberknecht. Catching the common base type keeps this call compatible with both APIs.
+          catch (Exception e) {
             log().error("Unable to send theme changed event", e);
           }
         })
