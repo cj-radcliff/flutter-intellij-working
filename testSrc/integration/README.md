@@ -17,11 +17,12 @@ Run `./gradlew integration`. This directory is the `integration` source set in [
 All files are under `io/flutter/integrationTest/`:
 
 - [`Setup.kt`](io/flutter/integrationTest/Setup.kt): Configures the IDE Starter test context: paths, plugin installation, VM options, and OS-specific settings.
-- [`ExistingProjectUITest.kt`](io/flutter/integrationTest/ExistingProjectUITest.kt): Base class for UI tests against IntelliJ IDEA 2026.2 opened on an existing Flutter project created with `flutter create`.
+- [`ExistingProjectUITest.kt`](io/flutter/integrationTest/ExistingProjectUITest.kt): Base class for UI tests against the selected IDE (see [Choosing the IDE](#choosing-the-ide)) opened on an existing Flutter project created with `flutter create`.
 - [`NewProjectUITest.kt`](io/flutter/integrationTest/NewProjectUITest.kt): UI test for the new Flutter project flow.
 - [`DeepLinksToolWindowTest.kt`](io/flutter/integrationTest/DeepLinksToolWindowTest.kt): UI test for the Deep Links tool window.
 - [`vmService/VmServiceTest.kt`](io/flutter/integrationTest/vmService/VmServiceTest.kt): Launches a `flutter test` process and exchanges VM Service messages with it over WebSocket.
 - [`utils/NewProject.kt`](io/flutter/integrationTest/utils/NewProject.kt): Helpers for creating new projects in UI tests.
+- [`utils/IdeSelection.kt`](io/flutter/integrationTest/utils/IdeSelection.kt): Resolves `-Pide.product` / `-Pide.version` to the IDE under test.
 - [`utils/Platform.kt`](io/flutter/integrationTest/utils/Platform.kt): Cross-platform paths, display modes, SDK executables, and retry-based project cleanup for Linux, macOS, and Windows.
 - [`utils/WalkthroughSteps.kt`](io/flutter/integrationTest/utils/WalkthroughSteps.kt): Step markers for test walkthrough recordings.
 
@@ -100,6 +101,20 @@ xdg-open ~/walkthroughs/index.html
 
 Run the recorder with `--help` for all options. For full details, see
 [`.agents/skills/record-test-walkthrough/SKILL.md`](../../.agents/skills/record-test-walkthrough/SKILL.md).
+
+### Choosing the IDE
+
+Tests based on `ExistingProjectUITest` run against the IDE chosen with two Gradle properties:
+
+| Property | Values |
+|---|---|
+| `-Pide.product` | `IU` (default; the unified IntelliJ IDEA distribution), `AI` (Android Studio), or `IC` (Community Edition, 2025.2 and earlier only) |
+| `-Pide.version` | `latest` (default; the newest stable release), a version such as `2026.2.3`, or a build number such as `262.10968.63`. For Android Studio, use its version, such as `2026.1.2.8` |
+
+For example, `./gradlew --no-daemon integration -Pide.product=AI -Pide.version=2026.1.2.8`. The test log prints the
+resolved build (`IDE under test: ...`). Because `latest` changes when a new IDE ships, pin `-Pide.version` when you
+need results to be reproducible. These properties are separate from `-Pide` / `-PideV`, which choose the platform the
+plugin is built against.
 
 ### Useful environment variables
 

@@ -20,6 +20,7 @@ import com.intellij.ide.starter.driver.engine.BackgroundRun
 import com.intellij.ide.starter.driver.engine.runIdeWithDriver
 import com.intellij.ide.starter.ide.IDETestContext
 import com.intellij.ide.starter.project.LocalProjectInfo
+import io.flutter.integrationTest.utils.IdeSelection
 import io.flutter.integrationTest.utils.Platform
 import io.flutter.integrationTest.utils.WalkthroughSteps
 import io.flutter.integrationTest.utils.createFlutterProjectWithCli
@@ -37,7 +38,8 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Base class for UI tests that start with IntelliJ IDEA 2026.2.3 already open on an existing Flutter project.
+ * Base class for UI tests that start with the IDE already open on an existing Flutter project. The IDE is chosen with
+ * `-Pide.product` and `-Pide.version` (default: the latest IntelliJ IDEA release; see [IdeSelection]).
  *
  * The project is created with `flutter create` (not the plugin's New Project wizard) in a temp directory before the
  * IDE starts, and deleted afterwards unless `KEEP_TEST_PROJECT=true`. Set `KEEP_IDE_OPEN_MINUTES` to leave the IDE
@@ -105,10 +107,10 @@ abstract class ExistingProjectUITest(private val packageName: String) {
     println("Opening existing project $projectDir")
     step(
       "Open the existing Flutter project",
-      "IntelliJ IDEA starts (splash screen), then opens the project created with `flutter create`. " +
+      "The IDE starts (splash screen), then opens the project created with `flutter create`. " +
       "The Project view shows its files and the status bar shows indexing until it finishes."
     )
-    context = Setup.setupTestContextIU262(javaClass.simpleName, LocalProjectInfo(projectDir))
+    context = Setup.setupTestContextFromProperties(javaClass.simpleName, LocalProjectInfo(projectDir))
     run = context.runIdeWithDriver()
     waitForProjectReady()
     // The Trial tab usually opens while the project loads, but can arrive shortly after; poll briefly here and again

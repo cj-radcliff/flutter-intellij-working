@@ -392,6 +392,10 @@ intellijPlatformTesting.testIde.register("integration") {
       listOf("-Dpath.to.build.plugin=${pluginArchive.get().asFile.absolutePath}")
     }
     systemProperty("dart.plugin.version", dartPluginVersion.trim())
+    // IDE under test: -Pide.product=IU|AI|IC and -Pide.version=latest|<version>|<build> (see IdeSelection.kt).
+    // These are separate from -Pide/-PideV, which choose the platform the plugin is built against.
+    providers.gradleProperty("ide.product").orNull?.let { systemProperty("ide.product", it) }
+    providers.gradleProperty("ide.version").orNull?.let { systemProperty("ide.version", it) }
     systemProperty(
       "allure.results.directory", project.layout.buildDirectory.get().asFile.absolutePath + "/allure-results"
     )

@@ -20,6 +20,7 @@ import com.intellij.ide.starter.project.ProjectInfoSpec
 import com.intellij.ide.starter.runner.Starter
 import com.intellij.ide.starter.utils.Git
 import com.intellij.openapi.util.SystemInfo
+import io.flutter.integrationTest.utils.IdeSelection
 import io.flutter.integrationTest.utils.Platform
 import org.kodein.di.DI
 import org.kodein.di.bindSingleton
@@ -93,6 +94,20 @@ class Setup {
           Files.newBufferedReader(Git.getRepoRoot().resolve("gradle.properties")).use(::load)
         }.getProperty("dartPluginVersion")?.trim()?.takeIf { it.isNotEmpty() }
         ?: error("dartPluginVersion is not configured in gradle.properties")
+    }
+
+    /**
+     * Sets up the IDE chosen with the `ide.product` and `ide.version` properties (default: the latest IntelliJ IDEA
+     * release). See [IdeSelection].
+     */
+    fun setupTestContextFromProperties(
+      hyphenateWithClass: String,
+      projectInfoSpec: ProjectInfoSpec = NoProject,
+    ): IDETestContext {
+      val context = setupTestContext(hyphenateWithClass, IdeSelection.fromSystemProperties(), projectInfoSpec)
+      // Log the resolved build so that results from a floating `latest` can be reproduced.
+      println("IDE under test: ${context.ide.productCode}-${context.ide.build}")
+      return context
     }
 
     /**

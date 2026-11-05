@@ -336,7 +336,7 @@ A recording normally shows:
 8. Project tree populated, with the `main.dart` run configuration in the toolbar.
 9. IDE trial tab (IntelliJ IDEA starts a 30-day trial automatically).
 
-To create a similar test for another flow or IDE build, use `Setup.setupTestContextIU262`.
+To create a similar test for another flow or IDE build, use `Setup.setupTestContextFromProperties` and choose the IDE with `-Pide.product` / `-Pide.version` (see `testSrc/integration/README.md`).
 The Dart plugin version in `gradle.properties` must support the IDE build; check with
 `curl -s 'https://plugins.jetbrains.com/api/plugins/6351/updates?size=8'`. List IDE builds with
 `./gradlew printProductsReleases`.
