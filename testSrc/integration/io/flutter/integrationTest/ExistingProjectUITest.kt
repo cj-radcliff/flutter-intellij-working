@@ -15,7 +15,9 @@ import com.intellij.driver.sdk.ui.components.common.JEditorUiComponent
 import com.intellij.driver.sdk.ui.components.common.codeEditorForFile
 import com.intellij.driver.sdk.ui.components.common.ideFrame
 import com.intellij.driver.sdk.waitFor
-import com.intellij.driver.sdk.waitForIndicators
+import com.intellij.driver.sdk.areIndicatorsVisible
+import com.intellij.driver.sdk.isProjectOpened
+import com.intellij.driver.sdk.singleProject
 import com.intellij.ide.starter.driver.engine.BackgroundRun
 import com.intellij.ide.starter.driver.engine.runIdeWithDriver
 import com.intellij.ide.starter.ide.IDETestContext
@@ -140,16 +142,19 @@ abstract class ExistingProjectUITest(private val packageName: String) {
       .joinToString("\n") { runCatching { it.text }.getOrDefault("") }
 
   /**
-   * Closes dialogs the IDE may pop up on its own during a test (for example the trial feedback survey "Tell us about
-   * your experience"), which would otherwise block the UI. Called while polling.
+   * Closes dialogs the IDE may pop up on its own during a test, which would otherwise block the UI. Called while
+   * polling. Handles IntelliJ IDEA's trial feedback survey ("Tell us about your experience", dismissed with "No, Thanks")
+   * and Android Studio's first-run "Sign in to Android Studio" dialog (dismissed with "Skip for now").
    */
   protected fun dismissInterruptions() {
     runCatching {
-      driver.ui.xx("//div[@class='JButton' and (@visible_text='No, Thanks' or @visible_text='No, thanks')]").list()
-        .firstOrNull()?.let {
-          println("Dismissing an IDE interruption dialog")
-          it.click()
-        }
+      driver.ui.xx(
+        "//div[(@class='JButton' and (@visible_text='No, Thanks' or @visible_text='No, thanks')) or " +
+        "@visible_text='Skip for now']"
+      ).list().firstOrNull()?.let {
+        println("Dismissing an IDE interruption dialog")
+        it.click()
+      }
     }
     closeTrialTab()
   }
@@ -256,10 +261,8 @@ abstract class ExistingProjectUITest(private val packageName: String) {
   private fun waitForProjectReady(attempts: Int = 3) {
     repeat(attempts) { attempt ->
       try {
-        inFrame {
-          waitFound(2.minutes)
-          driver.waitForIndicators(5.minutes)
-        }
+        inFrame { waitFound(2.minutes) }
+        waitForBackgroundTasks(5.minutes)
         println("Project is open and indexed.")
         return
       }
@@ -267,6 +270,27 @@ abstract class ExistingProjectUITest(private val packageName: String) {
         if (attempt == attempts - 1) throw e
         println("Project frame not stable yet (${e.javaClass.simpleName}); retrying")
         Thread.sleep(5_000)
+      }
+    }
+  }
+
+  /**
+   * Waits until the project is open and no background tasks have run for 10 seconds, like Driver's
+   * `waitForIndicators`, but dismisses interruption dialogs on every poll. A modal dialog that appears while the project
+   * loads (for example Android Studio's sign-in prompt) would otherwise keep the tasks from finishing.
+   */
+  private fun waitForBackgroundTasks(timeout: Duration) {
+    var quietSince: Long? = null
+    waitFor("background tasks to finish", timeout, 1.seconds) {
+      dismissInterruptions()
+      val project = runCatching { driver.singleProject() }.getOrNull()
+      if (project == null || !driver.isProjectOpened(project) || driver.areIndicatorsVisible(project)) {
+        quietSince = null
+        false
+      }
+      else {
+        val now = System.currentTimeMillis()
+        now - (quietSince ?: now.also { quietSince = it }) >= 10_000
       }
     }
   }
