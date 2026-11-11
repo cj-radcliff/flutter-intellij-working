@@ -21,8 +21,9 @@ One of:
 - A prose description: "open a project, run it on Chrome, edit `main.dart`, hot reload".
 - A Goal from the catalog that has no spec yet.
 
-If the description is vague ("test hot reload"), ask one question to pin down
-the Goal, or pick the most common path and say so in the spec's **Source**.
+If the description is vague ("test hot reload"), ask what you need to pin down
+the Goal, the device, and the starting state, in one message rather than a
+series, or pick the most common path and say so in the spec's **Source**.
 
 ## Workflow
 
@@ -40,25 +41,45 @@ the workflow without them, it isn't a user workflow.
 
 ### 2. Run the seam gate
 
-Three checks, in order. If any fails, stop and write a **rejection report**
-(below) instead of a spec.
+Four checks, cheapest first. If any fails, stop and write a **rejection
+report** (below) instead of a spec.
 
-**2a. Ownership.** Find the **target seam**: the specific code whose breakage
+**2a. Catalog.** Look the Goal up in
+[`specs/README.md`](../../../testSrc/integration/specs/README.md). If a row
+already covers it, stop and say which spec. This needs nothing but the Goal,
+so it comes before any code reading.
+
+**2b. Ownership.** Find the **target seam**: the specific code whose breakage
 must turn the test red. It must be in a plugin we maintain and can build
 broken:
 
 | Seam lives in | Accept? | Red build comes from |
 |---|---|---|
 | `io.flutter.*` (this repo) | yes | `tool/agent-testing/build-broken-plugin.sh --repo flutter` |
-| The Dart plugin | yes | `build-broken-plugin.sh --repo dart`, loaded via `DART_PLUGIN_ZIP` |
-| IntelliJ platform, the `flutter` CLI, the Dart SDK, a third-party plugin | **no** | nothing we can break, so nothing we can prove |
+| The Dart plugin (`com.jetbrains.lang.dart.*`, source in `dart-intellij-third-party`) | yes | `build-broken-plugin.sh --repo dart`, loaded via `DART_PLUGIN_ZIP` |
+| IntelliJ platform, the `flutter` CLI, the Dart SDK, a third-party plugin such as FES | **no** | nothing we can break, so nothing we can prove |
 
 Name the seam concretely: a class and method, an action ID, or a `plugin.xml`
-registration. Read `src/` and `resources/META-INF/plugin.xml` to find it;
-don't guess. If the only plugin code involved is a pass-through to the platform,
-reject.
+registration. If the only plugin code involved is a pass-through to the
+platform, reject.
 
-**2b. Level.** Pick the test level from the smallest runtime the seam needs
+**Finding the seam.** Don't guess which plugin owns the behavior; look:
+
+| Signal | Where | Reading it |
+|---|---|---|
+| Package prefix | class names in `src/`, a probe dump, or an `idea.log` stack trace | `io.flutter.*` is this repo; `com.jetbrains.lang.dart.*` is the Dart plugin; `com.intellij.*` is the platform |
+| Action ID prefix | `resources/META-INF/plugin.xml` here; the Dart plugin's `plugin.xml` | `Flutter.*` ours; `Dart.*` theirs |
+| Hand-off points | `grep -rl "com.jetbrains.lang.dart" src/` (about 90 files) | where `io.flutter` calls into Dart: `io.flutter.dart.DartPlugin` configures the Dart SDK; `FlutterSaveActionsManager` talks to `DartAnalysisServerService`; `DartPsiUtil` reads Dart PSI. The seam is whichever side owns the behavior the Goal is about, not whichever side the user clicked in |
+| Dart plugin source | `$DART_PLUGIN_REPO`, a checkout of `dart-intellij-third-party` | needed to name a Dart method and, later, to write a fault patch. If it isn't set, say so in the report; don't substitute a guess from the jar |
+
+Example: "an error appears in the editor after typing invalid Dart" goes
+editor → `com.jetbrains.lang.dart.analyzer.DartAnalysisServerService` → the
+Dart Analysis Server → the Dart plugin's annotator. Nothing in `io.flutter` is on that path, so the seam is
+the Dart plugin's, and the red build is a Dart plugin zip. "Hot reload applies
+an edit" goes toolbar → `ReloadFlutterAppRetarget` → `FlutterApp.performHotReload`
+→ the `flutter` daemon; the seam is ours.
+
+**2c. Level.** Pick the test level from the smallest runtime the seam needs
 to exist, not from how you'd phrase the assertion:
 
 | The seam needs | Level | Where |
@@ -71,10 +92,10 @@ Write one sentence in the spec saying why the level below yours can't prove
 the seam. "Needs real UI" is not a reason; "needs a live `flutter` daemon to
 answer the reload request" is.
 
-**2c. Duplication.** Check the catalog and `testSrc/`. If a spec already
-covers the Goal, stop and say which. If a spec shares the fixture and boot
-state with yours (same project, same device, same open file), extend that spec
-with a new Task instead of adding a spec; a UI boot costs minutes.
+**2d. Coalescing.** Now that you know the level: if it's `ui` and an existing
+spec shares the fixture and boot state (same project, same device, same open
+file), add a Task to that spec instead of creating a new one; a UI boot costs
+minutes. Check `testSrc/integration` too, for tests that predate the catalog.
 
 ### 3. Write the Steps table
 

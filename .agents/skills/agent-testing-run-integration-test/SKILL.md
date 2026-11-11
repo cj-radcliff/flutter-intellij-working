@@ -12,13 +12,20 @@ what happened from `run-result.json`, repair test defects inside a budget, and
 write the evidence report. You never change what the test checks.
 
 Design: [`agent-integration-testing.md`](../../design-docs/agent-integration-testing.md)
-sections 5.6–5.9. Scripts: [`scripts/`](scripts/).
+sections 5.6–5.9. Scripts: [`scripts/`](scripts/). Harness and platform
+details: [`ui-test-reference`](../ui-test-reference/SKILL.md).
+
+All modes run on Linux, macOS, and Windows. A workflow that applies to one
+platform only says so in the spec's **Fixture**; otherwise the test is expected
+to certify on whichever platform you're on, and the evidence report records
+which. The only Linux-only pieces are headless Xvfb and the walkthrough
+recorder.
 
 ## Modes
 
 | Mode | For | Proof required |
 |---|---|---|
-| `certify` | Every new or modified test, from any `*-to-spec` path | **Valid red** on the broken build, then **green** `N_green` times on the real build, same test bytes |
+| `certify` | Every new or modified test, from any `agent-testing-*-to-spec` path | **Valid red** on the broken build, then **green** `N_green` times on the real build, same test bytes |
 | `repro` | Open bugs with no fix yet | **Valid red** on `HEAD`. Test is tagged `unvalidated-repro` until a fix passes `certify` |
 | `check` | Tests already certified (new IDE build, new OS, periodic run) | Green `N_green` times |
 
@@ -34,7 +41,9 @@ Fail fast, before any 4-minute run, on:
 
 - `FLUTTER_SDK` unset or `flutter --version` failing; `flutter devices` not
   listing the spec's device.
-- No display (`DISPLAY` unset and no Xvfb) for `ui` tests.
+- No display for `ui` tests. Linux: `DISPLAY` set, or Xvfb available for
+  headless. macOS and Windows: a logged-in desktop session; headless isn't
+  supported there.
 - Less than 10 GB free, or the IDE cache missing when offline.
 - Lint failure:
   ```bash
@@ -117,7 +126,8 @@ Same command, without the broken zip, `N_green` times. All must pass with
 `failurePhase: NONE`, zero `idea.log` `SEVERE` entries with `io.flutter`
 frames (the harness fails the run on those during green), and no leftover
 `flutter`/`dart` processes. On Linux, attach the walkthrough recorder to the
-last green run; it costs no extra boot:
+last green run; it costs no extra boot. On macOS and Windows the per-step
+screenshots the harness takes are the evidence instead:
 
 ```bash
 .agents/skills/record-test-walkthrough/scripts/record_walkthrough.sh --test <fqcn> -- \
@@ -157,7 +167,7 @@ bundle.sha256
 broken-build.diff    the revert, merge-base range, or fault patch
 red/run-result.json  + idea.log slice + screenshots
 green-1..N/          run-result.json each
-walkthrough/         from the last green run (Linux)
+walkthrough/         from the last green run (Linux); per-step screenshots elsewhere
 git-status.txt       `git status --porcelain src resources` after everything: must be empty
 ```
 
@@ -167,7 +177,7 @@ Summary table in `report.md`:
 |---|---|
 | Test / spec | |
 | Mode | certify / repro / check |
-| IDE build | pinned version |
+| IDE build / platform | pinned version; Linux, macOS, or Windows |
 | Bundle hash | |
 | Red | strategy; failed at `O3`/`O4`; wall-clock |
 | Green | 3/3; wall-clock each |

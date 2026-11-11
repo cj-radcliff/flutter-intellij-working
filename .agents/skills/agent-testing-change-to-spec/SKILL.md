@@ -35,8 +35,9 @@ pass on any change that keeps the method, including a broken one.
 
 ### 2. Classify every hunk
 
-For each hunk that touches `src/`, `resources/`, or the Dart plugin, record
-one of:
+For each contiguous block of changed lines in the diff (a *hunk*, in
+`git diff` terms: one `@@ ... @@` section) that touches `src/`, `resources/`,
+or the Dart plugin, record one of:
 
 | Class | Meaning | Spec needed? |
 |---|---|---|
@@ -49,7 +50,7 @@ Changes that are only in `testSrc/` or `.agents/` need no spec.
 
 ### 3. Run the seam gate per Goal
 
-As in `workflow-to-spec` step 2. The seam is usually obvious from the diff;
+As in `agent-testing-workflow-to-spec` step 2. The seam is usually obvious from the diff;
 the level is not. Downshift when the changed code is reachable from
 `BasePlatformTestCase` (a producer, an inspection, a settings persistence
 class). Keep `ui` when the change is in an action's enablement, a dialog, a
@@ -76,7 +77,7 @@ user would notice to O3 and O4.
 
 ### 5. Save and report
 
-As in `workflow-to-spec` step 6. **Source** is the branch or PR. Report to the
+As in `agent-testing-workflow-to-spec` step 6. **Source** is the branch or PR. Report to the
 user: each Goal, its class, seam, level, and red-build strategy, and any
 hunk you classified as *Refactor* or *Internal*, so they can disagree.
 

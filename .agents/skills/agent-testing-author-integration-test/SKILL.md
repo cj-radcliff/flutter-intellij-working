@@ -10,10 +10,17 @@ performs its Steps, checks its Oracle parts O1–O4, and nothing else. You write
 code under `testSrc/` and `testData/` only.
 
 Design: [`agent-integration-testing.md`](../../design-docs/agent-integration-testing.md)
-sections 5.3–5.5. Harness: [`ExistingProjectUITest`](../../../testSrc/integration/io/flutter/integrationTest/ExistingProjectUITest.kt)
-and [`utils/`](../../../testSrc/integration/io/flutter/integrationTest/utils/).
-How to write a UI test, probe the UI, and record it:
+sections 5.3–5.5. How Starter, Driver, and our harness work, with every helper
+and the known pitfalls: [`ui-test-reference`](../ui-test-reference/SKILL.md).
+Read it before writing a `ui` test. Recording a run as a walkthrough:
 [`record-test-walkthrough`](../record-test-walkthrough/SKILL.md).
+
+`step(...)` and `assertOracle(...)`, used below, are **our** harness helpers in
+`FlutterIdeUITest`, not framework functions. They run a block, record its id,
+status, message, and timing, and the base class writes the result to
+`build/agent-testing/run-result.json` at the end of the test. Plain JUnit
+assertions inside the blocks are fine; what matters is that every check is
+inside the block for its oracle part.
 
 ## Input
 
@@ -29,12 +36,20 @@ If it doesn't, stop and send it back; don't fix the spec yourself.
 
 ### 1. Choose the base
 
-| Spec says | Base class | File | Run with |
-|---|---|---|---|
-| `ui` | `ExistingProjectUITest` (or the New Project base for wizard flows) | `testSrc/integration/io/flutter/integrationTest/<Name>UITest.kt` | `./gradlew integration --tests ...` |
-| `platform` | `BasePlatformTestCase`, or a heavy fixture test when the spec needs a real module/SDK | `testSrc/unit/io/flutter/<area>/<Name>Test.java` or `.kt` | `./gradlew test --tests ...` |
+The level comes from the spec's **Test level**; the base class comes from its
+**Fixture**:
 
-Don't change the level. If the spec's level looks wrong, say so and stop.
+| Level | Fixture says | Base class | File | Run with |
+|---|---|---|---|---|
+| `ui` | an existing project (`flutter create ...`, with or without an overlay) | `ExistingProjectUITest` | `testSrc/integration/io/flutter/integrationTest/<Name>UITest.kt` | `./gradlew integration --tests ...` |
+| `ui` | no project; the workflow creates one (New Project wizard) | `NewProjectUITest` base | same | same |
+| `ui` | no project at all (welcome screen, Settings, plugin dialogs) | `FlutterIdeUITest` | same | same |
+| `platform` | a light or heavy fixture | `BasePlatformTestCase`, or a heavy fixture test when the spec needs a real module/SDK | `testSrc/unit/io/flutter/<area>/<Name>Test.java` or `.kt` | `./gradlew test --tests ...` |
+
+All three `ui` bases extend `FlutterIdeUITest`, which carries the checks every
+UI test gets for free: plugin loaded, `idea.log` gate, process cleanup,
+`step`/`assertOracle`, `run-result.json`. Don't change the level. If the
+spec's level or fixture looks wrong, say so and stop.
 
 ### 2. Map the Steps table to code
 
@@ -96,7 +111,7 @@ test, `idea.log` and process cleanup after. Don't duplicate them.
 If any Drives cell is `probe`, or a locator you wrote doesn't resolve, write a
 throwaway test that performs the steps up to each unknown and at each one
 dumps the component tree and a screenshot (the harness's `probe("<step>")`
-helper does both). Run it **once**, with every unknown in the same run; then
+helper does both, on every platform). Run it **once**, with every unknown in the same run; then
 write the locators and delete the probe. A second probe needs a reason in your
 report. Read `plugin.xml` and `src/` first; the name you need is often there.
 
@@ -113,6 +128,9 @@ saying what state it creates and which spec uses it.
   on `platform` tests.
 - KDoc on the class: one line of purpose plus a link to the spec. The
   walkthrough recorder reads this as the summary.
+- The test must run on Linux, macOS, and Windows unless the spec's Fixture
+  says the workflow is platform-specific. Use `Platform.kt` for paths and
+  shortcuts; never hard-code a separator or a modifier key.
 - Run the lint on the spec and test together:
 
   ```bash

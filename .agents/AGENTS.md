@@ -10,6 +10,7 @@ This directory contains workspace customizations, rules, skills, and design docu
 - [`agent-integration-testing.md`](design-docs/agent-integration-testing.md): Proposal for agent skills that author, run, and validate IDE integration tests from workflows, bugs, and code changes.
 
 ## Skills
+- [`ui-test-reference`](skills/ui-test-reference/SKILL.md): How Starter, Driver, and the Flutter UI test harness work; read before writing or repairing a test under `testSrc/integration`.
 - [`record-test-walkthrough`](skills/record-test-walkthrough/SKILL.md): Write IntelliJ IDE Starter UI tests and record any automated UI test as a step-by-step screenshot walkthrough.
 - Agent-driven integration testing (see the design doc above; specs live in [`testSrc/integration/specs/`](../testSrc/integration/specs/README.md)):
   - [`agent-testing-workflow-to-spec`](skills/agent-testing-workflow-to-spec/SKILL.md): Prose workflow or coverage gap → workflow spec, after the seam gate.

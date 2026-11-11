@@ -16,7 +16,8 @@ read that first. What's different here is the input rules and the oracle.
 ## Input
 
 The issue text **as originally filed**: title, body, reproduction steps,
-environment (IDE product and version, OS, Flutter SDK). Nothing else.
+environment (IDE product and version, OS, Flutter SDK), plus any clarification
+the person running you gives (step 1). Nothing from after the fix.
 
 ## Hide-the-answer rules
 
@@ -36,17 +37,28 @@ These exist so the test is shaped by the bug, not by the fix.
 
 ## Workflow
 
-### 1. Extract the workflow from the report
+### 1. Check the report is reproducible
+
+A spec needs three things from the report: how to get there (starting state
+and steps), what the user saw, and what they expected instead. If any is
+missing or ambiguous, ask the person running you, in one message, before
+doing anything else. If they don't know either, offer two ways forward and let
+them choose: they comment on the issue to ask the reporter, or they ask you to
+draft that comment for them to post. Don't post it yourself. Don't proceed on
+guesses; anything you must assume to move on goes in **Preconditions** marked
+"(assumed)".
+
+### 2. Extract the workflow from the report
 
 From the reproduction steps, write the Goal, Tasks, and Interactions exactly
-as in `workflow-to-spec` step 1. The Goal is what the user was *trying* to do,
+as in `agent-testing-workflow-to-spec` step 1. The Goal is what the user was *trying* to do,
 not the bug. For #9106 ("empty SDK dropdown after cancelling the wizard") the
 Goal is "create a new Flutter project after backing out of another project
 type", and the bug is that one step on the way shows the wrong state.
 
-### 2. Run the seam gate
+### 3. Run the seam gate
 
-Same three checks as `workflow-to-spec` step 2, with one addition:
+Same four checks as `agent-testing-workflow-to-spec` step 2, with these additions:
 
 - **Ownership** also decides whether the bug is *ours*. If the path the user
   describes never enters `io.flutter` or Dart plugin code (a platform bug, a
@@ -61,7 +73,7 @@ Same three checks as `workflow-to-spec` step 2, with one addition:
   section is mandatory: the oracle must name the blocked thread and frame, not
   just "it took too long".
 
-### 3. Write the oracle for the correct behavior
+### 4. Write the oracle for the correct behavior
 
 The oracle says what a working plugin does, in the four parts:
 
@@ -76,7 +88,7 @@ If the report says "sometimes" or "intermittently", say so in **Requirements**
 and set the certification plan to `N_red = 3`; a 1-in-3 red is a real finding
 and goes back to the user as *intermittent*, not as a flake.
 
-### 4. Pin the environment
+### 5. Pin the environment
 
 - If the bug is tied to an IDE version (#8890 on 2026.1), set `ide.version` in
   **Fixture** instead of `latest`.
@@ -85,7 +97,7 @@ and goes back to the user as *intermittent*, not as a flake.
 - If the report names a platform (Windows for #9093), note it. Linux is the
   reference; a bug that only reproduces elsewhere is reported, not failed.
 
-### 5. Certification plan
+### 6. Certification plan
 
 Write what red and green mean for this bug:
 
@@ -96,14 +108,14 @@ Write what red and green mean for this bug:
 - Name the oracle part the red run should trip (usually O3 or O4). If the red
   run trips O1 or O2 instead, the spec has the pre-state wrong.
 
-### 6. Save and report
+### 7. Save and report
 
-As in `workflow-to-spec` step 6, plus: the **Source** line is the issue URL,
+As in `agent-testing-workflow-to-spec` step 6, plus: the **Source** line is the issue URL,
 and the report to the user lists every assumption you made.
 
 ## Hard rules
 
 - Never read the fix, the fix PR, or post-fix comments.
+- Never comment on the issue yourself; draft the comment for the user if asked.
 - Never write the oracle as "the bug doesn't happen". Write the correct
   behavior, with the symptom in O4.
-- Never comment on the issue. Findings go to the user.

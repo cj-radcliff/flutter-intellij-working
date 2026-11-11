@@ -8,7 +8,8 @@
 #       [--base <commit>] [--out <dir>] [--keep]
 #
 #   --repo flutter   this repository; output goes to -Pflutter.plugin.zip
-#   --repo dart      the Dart plugin repository (set DART_PLUGIN_REPO or
+#   --repo dart      the Dart plugin repository, a checkout of
+#                    dart-intellij-third-party (set DART_PLUGIN_REPO or
 #                    --repo-path); output goes to DART_PLUGIN_ZIP
 #   --rev            build exactly this commit (change-to-spec: merge-base)
 #   --revert         start from --base (default HEAD) and reverse-apply these
@@ -63,7 +64,7 @@ case "$repo" in
   dart)
     repo_path="${repo_path:-${DART_PLUGIN_REPO:-}}"
     [[ -n "$repo_path" ]] || { echo "set DART_PLUGIN_REPO or pass --repo-path for --repo dart" >&2; exit 2; }
-    # TODO(step 3): confirm the Dart plugin's build task and distribution path.
+    # TODO(step 3): confirm dart-intellij-third-party's build task and distribution path.
     build_cmd=(./gradlew --no-daemon buildPlugin -q)
     zip_glob="build/distributions/*.zip"
     ;;
