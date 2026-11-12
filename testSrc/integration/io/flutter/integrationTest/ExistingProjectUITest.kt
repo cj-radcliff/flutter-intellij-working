@@ -6,28 +6,23 @@
 
 package io.flutter.integrationTest
 
-import com.intellij.driver.client.Driver
 import com.intellij.driver.sdk.openFile
-import com.intellij.driver.sdk.ui.ui
 import com.intellij.driver.sdk.ui.components.UiComponent.Companion.waitFound
 import com.intellij.driver.sdk.ui.components.common.IdeaFrameUI
 import com.intellij.driver.sdk.ui.components.common.JEditorUiComponent
 import com.intellij.driver.sdk.ui.components.common.codeEditorForFile
 import com.intellij.driver.sdk.ui.components.common.ideFrame
+import com.intellij.driver.sdk.ui.ui
 import com.intellij.driver.sdk.waitFor
 import com.intellij.driver.sdk.waitForIndicators
-import com.intellij.ide.starter.driver.engine.BackgroundRun
 import com.intellij.ide.starter.driver.engine.runIdeWithDriver
-import com.intellij.ide.starter.ide.IDETestContext
 import com.intellij.ide.starter.project.LocalProjectInfo
 import io.flutter.integrationTest.utils.Platform
-import io.flutter.integrationTest.utils.WalkthroughSteps
+import io.flutter.integrationTest.utils.RunResult.Phase
 import io.flutter.integrationTest.utils.createFlutterProjectWithCli
 import io.flutter.integrationTest.utils.deleteFlutterProject
 import org.junit.jupiter.api.AfterAll
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestInstance
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -37,15 +32,17 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Base class for UI tests that start with IntelliJ IDEA 2026.2.3 already open on an existing Flutter project.
+ * Base class for UI tests that start with the IDE already open on an existing Flutter project.
  *
  * The project is created with `flutter create` (not the plugin's New Project wizard) in a temp directory before the
  * IDE starts, and deleted afterwards unless `KEEP_TEST_PROJECT=true`. Set `KEEP_IDE_OPEN_MINUTES` to leave the IDE
  * running after the test. Requires the `FLUTTER_SDK` environment variable.
+ *
+ * The plugin-loaded gate, `step`/`assertOracle`/`probe`, the `idea.log` gate, and process cleanup come from
+ * [FlutterIdeUITest].
  */
-@Tag("ui")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-abstract class ExistingProjectUITest(private val packageName: String) {
+abstract class ExistingProjectUITest(private val packageName: String) : FlutterIdeUITest() {
 
   private val projectFolder = "${packageName}_${System.currentTimeMillis()}"
   private val parentDir: String = Platform.testProjectsDir.toString()
@@ -53,38 +50,14 @@ abstract class ExistingProjectUITest(private val packageName: String) {
   /** Root of the test project on disk. */
   protected val projectDir: Path = Paths.get(parentDir, projectFolder)
 
-  protected lateinit var run: BackgroundRun
-
-  /** The IDE Starter context of the running IDE (paths, VM options). */
-  protected lateinit var context: IDETestContext
-
-  /** This run's IDE log. IDE Starter starts each test with a fresh test home, so it only covers this run. */
-  protected val ideLogFile: Path
-    get() = context.paths.testHome.resolve("log").resolve("idea.log")
-
-  protected val driver: Driver
-    get() = run.driver
-
   @BeforeAll
   fun createProject() {
     createFlutterProjectWithCli(projectFolder, projectName = packageName, directory = parentDir)
     prepareProject()
   }
 
-  /** Hook for subclasses to adjust the project on disk before the IDE opens it. */
+  /** Hook for subclasses to adjust the project on disk before the IDE opens it, for example to apply an overlay. */
   protected open fun prepareProject() {}
-
-  @AfterEach
-  fun closeIde() {
-    WalkthroughSteps.finish()
-    if (!::run.isInitialized) return
-    val keepOpenMinutes = System.getenv("KEEP_IDE_OPEN_MINUTES")?.toLongOrNull() ?: 0L
-    if (keepOpenMinutes > 0) {
-      println("Keeping IDE open for $keepOpenMinutes minute(s)")
-      Thread.sleep(keepOpenMinutes * 60_000)
-    }
-    run.closeIdeAndWait()
-  }
 
   @AfterAll
   fun deleteProject() {
@@ -96,20 +69,16 @@ abstract class ExistingProjectUITest(private val packageName: String) {
     }
   }
 
-  /** Marks the start of a user-visible step for walkthrough recordings; see [WalkthroughSteps]. */
-  protected fun step(title: String, expect: String) = WalkthroughSteps.step(title, expect)
-
   /** Starts the IDE on [projectDir] and waits until the project is open and indexed. */
   protected fun startIdeOnProject() {
-    println(Platform.describe())
     println("Opening existing project $projectDir")
     step(
       "Open the existing Flutter project",
       "IntelliJ IDEA starts (splash screen), then opens the project created with `flutter create`. " +
       "The Project view shows its files and the status bar shows indexing until it finishes."
     )
-    context = Setup.setupTestContextIU262(javaClass.simpleName, LocalProjectInfo(projectDir))
-    run = context.runIdeWithDriver()
+    startIde(Setup.setupTestContextIU262(javaClass.simpleName, LocalProjectInfo(projectDir))) { it.runIdeWithDriver() }
+    result.currentPhase = Phase.SETUP
     waitForProjectReady()
     // The Trial tab usually opens while the project loads, but can arrive shortly after; poll briefly here and again
     // when opening files or polling conditions in [dismissInterruptions].
@@ -132,45 +101,47 @@ abstract class ExistingProjectUITest(private val packageName: String) {
   /** The editor for [fileName], e.g. `main.dart`. */
   protected fun IdeaFrameUI.editorFor(fileName: String): JEditorUiComponent = codeEditorForFile(fileName)
 
-  /** Text of all editors in the frame, including run and messages consoles. */
-  protected fun IdeaFrameUI.allEditorText(): String =
-    xx("//div[@class='EditorComponentImpl']", JEditorUiComponent::class.java).list()
-      .joinToString("\n") { runCatching { it.text }.getOrDefault("") }
+  // ---------------------------------------------------------------------------------------------------------------
+  // Consoles
 
   /**
-   * Closes dialogs the IDE may pop up on its own during a test (for example the trial feedback survey "Tell us about
-   * your experience"), which would otherwise block the UI. Called while polling.
+   * Text of the console views in the frame (Run, Debug, Messages, Flutter consoles), and only those: source editors are
+   * excluded, so a string in `main.dart` or `pubspec.yaml` can't satisfy a console check. Pass [toolWindow] (the tool
+   * window's title, for example `Run`) to read only consoles inside that tool window. The result starts at
+   * [sinceOffset], so a test can record the length before its trigger step and read only what came after.
    */
-  protected fun dismissInterruptions() {
-    runCatching {
-      driver.ui.xx("//div[@class='JButton' and (@visible_text='No, Thanks' or @visible_text='No, thanks')]").list()
-        .firstOrNull()?.let {
-          println("Dismissing an IDE interruption dialog")
-          it.click()
-        }
+  protected fun IdeaFrameUI.consoleText(toolWindow: String? = null, sinceOffset: Int = 0): String {
+    val scope = if (toolWindow == null) "" else "//div[@class='InternalDecoratorImpl'][.//div[@accessiblename='$toolWindow' or @text='$toolWindow']]"
+    val all = xx("$scope//div[@class='ConsoleViewImpl']//div[@class='EditorComponentImpl']", JEditorUiComponent::class.java).list()
+      .joinToString("\n") { runCatching { it.text }.getOrDefault("") }
+    return when {
+      sinceOffset <= 0 -> all
+      sinceOffset >= all.length -> ""
+      else -> all.substring(sinceOffset)
     }
-    closeTrialTab()
   }
 
-  /**
-   * Closes the "Trial" editor tab that IntelliJ IDEA Ultimate opens on its own after it starts a free trial (logged as
-   * "Automatically opened an editor tab for 'active' trial state"). It covers the editor and shows up in walkthroughs.
-   * Returns true if a tab was closed.
-   */
-  protected fun closeTrialTab(): Boolean = runCatching {
-    val close = driver.ui.xx("//div[@class='EditorTabLabel'][.//div[@visible_text='Trial']]//div[@myicon='closeSmall.svg']")
-      .list().firstOrNull() ?: return false
-    println("Closing IntelliJ IDEA's Trial tab")
-    close.click()
-    true
-  }.getOrDefault(false)
+  /** Length of [consoleText] now, to pass as `sinceOffset` after the trigger step. */
+  protected fun IdeaFrameUI.consoleOffset(toolWindow: String? = null): Int = consoleText(toolWindow).length
 
-  /** Waits until any editor or console in the frame contains one of [texts]; returns the one found. */
-  protected fun IdeaFrameUI.waitForConsoleText(vararg texts: String, timeout: Duration = 3.minutes): String {
+  /**
+   * Waits until a console contains one of [texts]; returns the one found. Fails fast if one of [failTexts] appears
+   * first, so an error doesn't turn into a timeout. Reads consoles only, never source editors.
+   */
+  protected fun IdeaFrameUI.waitForConsoleText(
+    vararg texts: String,
+    toolWindow: String? = null,
+    sinceOffset: Int = 0,
+    failTexts: List<String> = emptyList(),
+    timeout: Duration = 3.minutes,
+  ): String {
     var found = ""
     waitFor("console to contain one of ${texts.toList()}", timeout, 2.seconds) {
       dismissInterruptions()
-      val all = allEditorText()
+      val all = consoleText(toolWindow, sinceOffset)
+      failTexts.firstOrNull { all.contains(it) }?.let { bad ->
+        throw AssertionError("Console shows '$bad' while waiting for one of ${texts.toList()}")
+      }
       found = texts.firstOrNull { all.contains(it) } ?: ""
       found.isNotEmpty()
     }
@@ -178,13 +149,8 @@ abstract class ExistingProjectUITest(private val packageName: String) {
     return found
   }
 
-  /** Waits until [condition] holds, polling every 2 seconds. */
-  protected fun waitUntil(message: String, timeout: Duration = 3.minutes, condition: () -> Boolean) {
-    waitFor(message, timeout, 2.seconds) {
-      dismissInterruptions()
-      condition()
-    }
-  }
+  // ---------------------------------------------------------------------------------------------------------------
+  // Devices and apps
 
   /** Opens the Flutter device selector and clicks the device whose name starts with one of [names]. */
   protected fun IdeaFrameUI.selectDevice(vararg names: String) {
@@ -235,20 +201,29 @@ abstract class ExistingProjectUITest(private val packageName: String) {
   }
 
   /**
-   * Stops the running app by clicking a Stop button (in the toolbar or the Run/Debug tool window), like a user would.
+   * Stops the running app by clicking a Stop button (in the toolbar or the Run/Debug tool window), like a user would,
+   * and **fails** unless the process ends: the Stop buttons go disabled and the console reports the process finished.
    * The Stop shortcut differs between keymaps (Ctrl+F2 vs. ⌘F2 on macOS), and invoking the `Stop` action with the
-   * editor as context is rejected as disabled.
+   * editor as context is rejected as disabled, so the button is the reliable path.
    */
+  protected fun IdeaFrameUI.stopAppAndVerifyTerminated(timeout: Duration = 30.seconds) {
+    val stop = xx("//div[@class='ActionButton' and @myicon='stop.svg']").list().firstOrNull { it.isEnabled() }
+               ?: throw AssertionError("No enabled Stop button: is an app running?")
+    stop.click()
+    waitFor("app process to stop", timeout, 500.milliseconds) {
+      xx("//div[@class='ActionButton' and @myicon='stop.svg']").list().none { it.isEnabled() }
+    }
+    waitFor("console to report the process finished", timeout, 500.milliseconds) {
+      val text = consoleText()
+      text.contains("Process finished") || text.contains("Application finished") || text.contains("Lost connection to device")
+    }
+    println("App stopped")
+  }
+
+  /** Best-effort stop for cleanup paths; prefer [stopAppAndVerifyTerminated] in test steps. */
   protected fun IdeaFrameUI.stopApp() {
-    runCatching {
-      val stop = xx("//div[@class='ActionButton' and @myicon='stop.svg']").list().firstOrNull { it.isEnabled() }
-                 ?: error("no enabled Stop button")
-      stop.click()
-      waitFor("app to stop", 10.seconds, 500.milliseconds) {
-        xx("//div[@class='ActionButton' and @myicon='stop.svg']").list().none { it.isEnabled() }
-      }
-      println("App stopped")
-    }.onFailure { println("Could not stop the app (${it.message}); it stops when the IDE closes.") }
+    runCatching { stopAppAndVerifyTerminated() }
+      .onFailure { println("Could not stop the app (${it.message}); it stops when the IDE closes.") }
   }
 
   private fun waitForProjectReady(attempts: Int = 3) {

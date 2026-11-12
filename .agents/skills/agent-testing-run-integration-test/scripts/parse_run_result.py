@@ -4,6 +4,7 @@
 Usage:
   parse_run_result.py <run-result.json> --expect red  [--expect-oracle O3,O4]
   parse_run_result.py <run-result.json> --expect green
+  parse_run_result.py <run-result.json> --expect plugin-off
 
 Prints a one-line verdict and a JSON summary; exit 0 when the run matches
 the expectation, 1 otherwise. This script, not the agent, decides whether a
@@ -18,6 +19,11 @@ red run is valid, so the rules live here:
 
   Valid green := failurePhase == "NONE" && testsAborted == 0
                  && ideaLogSevere == []  && leakedProcesses == []
+
+  Valid plugin-off (the FLUTTER_UI_TEST_WITHOUT_PLUGIN control) :=
+                 pluginLoaded == false && failurePhase != "NONE" && testsAborted == 0
+                 (any failure counts: a test that passes without the plugin isn't
+                 testing the plugin)
 
 Expected run-result.json shape (written by the harness):
 {
@@ -55,6 +61,16 @@ def classify(r, expect, expected_oracles):
     phase = r.get("failurePhase", "NONE")
     bucket = BUCKETS.get(phase, "unknown")
     reasons = []
+
+    if expect == "plugin-off":
+        if r.get("pluginLoaded", False):
+            reasons.append("plugin WAS loaded; this is not a plugin-off run")
+        if phase == "NONE":
+            reasons.append("test PASSED without the plugin: it is not testing the plugin")
+        if r.get("testsAborted", 0):
+            reasons.append(f"testsAborted={r['testsAborted']} (a skip is not a result)")
+        verdict = "valid-plugin-off" if not reasons else "invalid-plugin-off"
+        return verdict, ("control" if not reasons else "test-defect"), reasons
 
     if not r.get("pluginLoaded", False):
         reasons.append("plugin not loaded (environment)")
@@ -132,7 +148,7 @@ def main(argv):
     for reason in reasons:
         print(f"  - {reason}")
     print(json.dumps(summary, indent=2))
-    return 0 if verdict in ("valid-red", "valid-green") else 1
+    return 0 if verdict in ("valid-red", "valid-green", "valid-plugin-off") else 1
 
 
 if __name__ == "__main__":

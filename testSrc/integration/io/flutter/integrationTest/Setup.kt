@@ -95,8 +95,25 @@ class Setup {
         ?: error("dartPluginVersion is not configured in gradle.properties")
     }
 
+    /** The IntelliJ IDEA build the UI tests use unless `ide.version` says otherwise. */
+    const val DEFAULT_IU_BUILD = "262.10968.63"
+
     /**
-     * IntelliJ IDEA 2026.2.3 (unified distribution).
+     * The IDE build number to test on: the `ide.version` system property (forwarded from `-Pide.version` by the
+     * `integration` Gradle task) when it is a build number such as `262.10968.63`, otherwise [DEFAULT_IU_BUILD].
+     * The runner pins this for every run of a certification so red and green use the same IDE.
+     */
+    val ideBuildNumber: String by lazy {
+      val requested = System.getProperty("ide.version")?.trim().orEmpty()
+      when {
+        requested.isEmpty() || requested.equals("latest", ignoreCase = true) -> DEFAULT_IU_BUILD
+        Regex("""\d{3}\.\d+\.\d+""").matches(requested) -> requested
+        else -> error("ide.version must be a build number like 262.10968.63 (got '$requested'); version-to-build resolution is not implemented yet")
+      }
+    }
+
+    /**
+     * IntelliJ IDEA 2026.2 (unified distribution), build [ideBuildNumber].
      */
     fun setupTestContextIU262(
       hyphenateWithClass: String,
@@ -104,7 +121,7 @@ class Setup {
     ): IDETestContext {
       return setupTestContext(
         hyphenateWithClass, IdeProductProvider.IU.copy(
-          buildNumber = "262.10968.63",
+          buildNumber = ideBuildNumber,
           buildType = BuildType.RELEASE.type
         ), projectInfoSpec
       )
@@ -143,12 +160,25 @@ class Setup {
       val testCase = TestCase(ideInfo, projectInfoSpec)
 
       return Starter.newContext(testName = hyphenateWithClass, testCase = testCase).apply {
-        // Install the plugin that was built by the buildPlugin task
-        val pluginPath = System.getProperty("path.to.build.plugin")
+        // Install the Flutter plugin: `flutter.plugin.zip` (from `-Pflutter.plugin.zip`, used by the certification
+        // runner to load a deliberately broken build) wins over the zip that `buildPlugin` just made. With
+        // FLUTTER_UI_TEST_WITHOUT_PLUGIN=true no Flutter plugin is installed at all: the control run in which every
+        // UI test must fail on its own checks.
+        val withoutPlugin = System.getenv("FLUTTER_UI_TEST_WITHOUT_PLUGIN").toBoolean()
+        val pluginPath = System.getProperty("flutter.plugin.zip")?.takeIf { it.isNotBlank() }
+                         ?: System.getProperty("path.to.build.plugin")
+                         ?: error("Neither flutter.plugin.zip nor path.to.build.plugin is set")
         // DART_PLUGIN_ZIP installs a locally built Dart plugin (for example from a dart-intellij-third-party pull
         // request) instead of the Marketplace version.
         val localDartPlugin = System.getenv("DART_PLUGIN_ZIP")?.takeIf { it.isNotBlank() }
-        val plugins = PluginConfigurator(this).installPluginFromPath(Paths.get(pluginPath))
+        val plugins = PluginConfigurator(this)
+        if (withoutPlugin) {
+          println("FLUTTER_UI_TEST_WITHOUT_PLUGIN is set: NOT installing the Flutter plugin")
+        }
+        else {
+          println("Installing the Flutter plugin from $pluginPath")
+          plugins.installPluginFromPath(Paths.get(pluginPath))
+        }
         if (localDartPlugin != null) {
           println("Installing the Dart plugin from $localDartPlugin")
           plugins.installPluginFromPath(Paths.get(localDartPlugin))
