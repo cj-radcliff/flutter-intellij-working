@@ -134,6 +134,12 @@ Oracles that only look at the editor or the console text are usually
 incomplete: ask what the user would see or lose if the seam were broken, and
 check that.
 
+Two lessons from T1: keep **O2 about whether our code acted**, not whether it
+acted correctly (a reload that became a restart still satisfies O2; O3/O4
+catch it), and remember that the plugin **clears the Run console** when a
+reload or restart starts, so a post-trigger console check reads the whole
+console rather than an offset into it.
+
 ### 5. Write the rest
 
 - **Requirements** (optional): a time or health bound ("reload completes within

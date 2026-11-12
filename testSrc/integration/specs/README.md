@@ -7,7 +7,7 @@ The spec format is [`TEMPLATE.md`](TEMPLATE.md); the design is
 
 | Goal | Tasks | Spec | Level | Status | Priority | Owner |
 |---|---|---|---|---|---|---|
-| Run an app and see an edit after hot reload | Launch, Edit, Reload, Stop | `hot-reload-applies-edit.md` | `ui` | planned (MVP T1) | P0 | plugin team |
+| Run an app and see an edit after hot reload | Launch, Edit, Reload, Stop | `hot-reload-applies-edit.md` | `ui` | certified 2026-11-12 (red: reload→restart fault at O3; green 3/3 on IU 262.10968.63, Linux) | P0 | plugin team |
 | Create a new Flutter project from the wizard after backing out of another project type ([#9106](https://github.com/flutter/flutter-intellij/issues/9106)) | Open wizard, Pick another type, Cancel, Pick Flutter, Pick SDK, Create | `new-project-after-cancel.md` | `ui` | planned (MVP T2) | P0 | plugin team |
 | Run a widget test whose name is not ASCII ([#7985](https://github.com/flutter/flutter-intellij/issues/7985)) | Open test, Run from gutter, Read result | `run-test-non-ascii-name.md` | `platform` | planned (MVP T3) | P1 | plugin team |
 | Open an existing Flutter project that has no `.idea/` ([#8845](https://github.com/flutter/flutter-intellij/issues/8845)) | Open folder, Wait for indexing, Confirm Flutter module | `open-project-without-idea-dir.md` | `ui` | planned (MVP T4) | P1 | plugin team |

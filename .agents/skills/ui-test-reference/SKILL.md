@@ -243,3 +243,5 @@ Tests never check the OS themselves.
 | `x("//div[contains(@javaclass,'DeviceSelectorAction')]")` threw "more than one UiComponent" | the selector exists twice (main toolbar and run toolbar) | `xx(...).list()` when there may be several; `x()` only when exactly one |
 | `run-result.json` showed an empty failure message | Starter's `DriverWithContextError` starts with an ANSI banner line | `RunResult.summarize` unwraps to the innermost assertion |
 | `Stop` action rejected as disabled when invoked | the editor was the action context | click the Stop button, or pass the Run tool window as `component` |
+| `consoleText()` was empty while the Run console clearly had output | `@class='ConsoleViewImpl'` matches the simple class name exactly; the Flutter run console is a `DaemonConsoleView` subclass | match subclasses with `contains(@javaclass, 'ConsoleView')` |
+| `tryToExecute` through a raw `@Remote` threw `InvocationTargetException` | it must run on the EDT | use `driver.invokeAction(...)` (the SDK does the EDT hop and the rejection check); `invokeFlutterAction` wraps it |

@@ -9,6 +9,8 @@ package io.flutter.integrationTest
 import com.intellij.driver.client.Driver
 import com.intellij.driver.sdk.ActionManager
 import com.intellij.driver.sdk.getPlugin
+import com.intellij.driver.sdk.invokeAction
+import com.intellij.driver.model.OnDispatcher
 import com.intellij.driver.sdk.isPluginLoaded
 import com.intellij.driver.sdk.ui.components.UiComponent
 import com.intellij.driver.sdk.ui.ui
@@ -228,18 +230,20 @@ abstract class FlutterIdeUITest {
   /**
    * Invokes action [actionId] the way a user's click would: through `ActionManager.tryToExecute`, which runs the
    * action's `update()` in the context of [component] (or the focused component) and refuses actions that are
-   * disabled or hidden there. A refusal fails the test with the action's error, so a broken `update()` is caught
-   * instead of silently skipped. Use this for every `Flutter.*` action a spec drives by ID.
+   * disabled or hidden there. An unregistered action or a refusal fails the test with the reason, so a broken
+   * `update()` or a missing `plugin.xml` entry is caught instead of silently skipped. Use this for every action a spec
+   * drives by ID; pass the editor or tool window as [component] when enablement depends on context.
    */
   protected fun invokeFlutterAction(actionId: String, component: UiComponent? = null, place: String = "FlutterUITest") {
-    val actionManager = driver.service(ActionManager::class)
-    val action = actionManager.getAction(actionId)
-      ?: error("Action '$actionId' is not registered. Check plugin.xml, and that the plugin loaded.")
-    val callback = driver.withContext {
-      actionManager.tryToExecute(action, null, component?.component, place, true)
+    val registered = driver.withContext(OnDispatcher.EDT) { driver.service(ActionManager::class).getAction(actionId) != null }
+    if (!registered) error("Action '$actionId' is not registered. Check plugin.xml, and that the plugin loaded.")
+    try {
+      // The SDK's invokeAction calls tryToExecute(action, null, component, place, now) and throws if the callback was
+      // rejected (disabled or invisible in this context).
+      driver.invokeAction(actionId, now = true, component = component?.component, place = place)
     }
-    if (callback.isRejected()) {
-      error("Action '$actionId' was rejected (disabled or not visible in this context): ${callback.getError()}")
+    catch (e: IllegalStateException) {
+      throw AssertionError("Action '$actionId' was rejected (disabled or not visible in this context): ${e.message}", e)
     }
     println("Invoked action $actionId")
   }

@@ -112,7 +112,9 @@ abstract class ExistingProjectUITest(private val packageName: String) : FlutterI
    */
   protected fun IdeaFrameUI.consoleText(toolWindow: String? = null, sinceOffset: Int = 0): String {
     val scope = if (toolWindow == null) "" else "//div[@class='InternalDecoratorImpl'][.//div[@accessiblename='$toolWindow' or @text='$toolWindow']]"
-    val all = xx("$scope//div[@class='ConsoleViewImpl']//div[@class='EditorComponentImpl']", JEditorUiComponent::class.java).list()
+    // `@class` is the simple class name and matches exactly; the Flutter run console is a `DaemonConsoleView`
+    // (a `ConsoleViewImpl` subclass), so match on the fully qualified `@javaclass` instead.
+    val all = xx("$scope//div[contains(@javaclass, 'ConsoleView')]//div[@class='EditorComponentImpl']", JEditorUiComponent::class.java).list()
       .joinToString("\n") { runCatching { it.text }.getOrDefault("") }
     return when {
       sinceOffset <= 0 -> all
