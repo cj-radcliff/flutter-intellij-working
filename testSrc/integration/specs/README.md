@@ -20,3 +20,5 @@ not certified), `certified` (red and green proven; see the evidence report),
 `unvalidated-repro` (red proven on an open bug, no fix yet), `gap` (no spec),
 `rejected: <reason>` (the seam gate said no; keep the row so the decision is
 recorded).
+
+Findings from certification runs that are not test defects (platform behaviour, third-party bugs, environment traps): [`FINDINGS.md`](FINDINGS.md).

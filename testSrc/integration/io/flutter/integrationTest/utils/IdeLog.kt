@@ -37,6 +37,7 @@ object IdeLog {
     // kotlinx.coroutines' debug probes with "Debug metadata version mismatch. Expected: 1, got 2" because Dart is
     // compiled with a newer Kotlin than the platform's stdlib. No io.flutter frames; the same entries appear in a
     // hand-run IDE (witness session 2026-11-13) with no visible effect. Approved by Cory for T4 certification on 252.
+    // Regression of flutter/dart-intellij-third-party#210 / flutter-intellij#8729; see testSrc/integration/specs/FINDINGS.md.
     Regex("Debug metadata version mismatch\\. Expected: 1, got 2"),
   )
 

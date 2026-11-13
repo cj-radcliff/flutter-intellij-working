@@ -166,6 +166,13 @@ Every non-passing run goes in exactly one bucket, from `run-result.json`:
 | **Test defect** | `SETUP` or `STEP` failure; `testsAborted > 0`; a locator not found; flaky green; the broken build *passing* | Repair, within budget |
 | **Product behavior** | `ORACLE` or `FREEZE` after all steps passed | On the broken build: valid red. On the real build: a real finding; report it and stop |
 
+Before you call anything a product finding, read
+[`testSrc/integration/specs/FINDINGS.md`](../../../testSrc/integration/specs/FINDINGS.md): it lists the
+platform and third-party behaviours already seen (Dart-plugin SEVEREs on 25x,
+out-of-process JCEF freezing the EDT under Xvfb, IDE-build-dependent bugs).
+When you find a new one, append an entry in the same format, with a link to the
+evidence directory, in the same commit as the test.
+
 Repair budget: **3 iterations or about 45 minutes**, whichever first. Repair
 runs are `N = 1`. What a repair may touch: locators, waits (condition-based
 only), setup steps, overlay files, the harness. What it may not touch: the
@@ -211,8 +218,9 @@ Summary table in `report.md`:
 | Verdict | **certified** / unvalidated-repro / flaky / product finding / blocked |
 | Suggested commit message | |
 
-Report to the user with the verdict and the path. Commit to the local branch
-only if asked. Never push.
+Report to the user with the verdict and the path, and list every finding
+that is not a defect of the test under certification (new `FINDINGS.md`
+entries, issues to file). Commit to the local branch only if asked. Never push.
 
 ### 7. Witness mode: the user sees it themselves
 

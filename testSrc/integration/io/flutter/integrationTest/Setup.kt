@@ -254,6 +254,7 @@ class Setup {
             // ide.browser.jcef.out-of-process.enabled=true); under Xvfb the cef_server handshake that the Markdown
             // preview of an auto-opened README.md triggers blocked the EDT for minutes (T4 green #1, 2026-11-13), so
             // nothing rendered and the device selector never appeared. On a desktop the same IDE came up in-process.
+            // See testSrc/integration/specs/FINDINGS.md.
             addSystemProperty("jcef.remote.enabled", false)
             addSystemProperty("ide.native.launcher", false) // Avoid launcher issues on Linux
 

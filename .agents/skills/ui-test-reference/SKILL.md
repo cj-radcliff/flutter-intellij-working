@@ -231,6 +231,10 @@ Tests never check the OS themselves.
 
 ## 5. Pitfalls already hit
 
+Product and platform findings (as opposed to harness pitfalls) live in
+[`testSrc/integration/specs/FINDINGS.md`](../../../testSrc/integration/specs/FINDINGS.md); read it before
+calling a failure a product finding, and append to it when you find one.
+
 | Symptom | Cause | Rule |
 |---|---|---|
 | Every test "ran" but nothing Flutter-specific worked; failures were slow timeouts | `Flutter.zip` was empty; the plugin never loaded | plugin-loaded gate in `startIde` |
@@ -249,3 +253,4 @@ Tests never check the OS themselves.
 | A hand-launched IDE "with the fix" still showed the bug; both manual sandboxes had empty `log/` dirs | Starter leaves `<ide-home>.vmoptions` next to the cached IDE with `-Didea.{config,system,plugins,log}.path` pointing at the **last test's** sandbox; `-D` beats `idea.properties`/`IDEA_PROPERTIES`, so the IDE silently ran the test's (broken) plugin | launch by hand only through `tool/agent-testing/launch-ide.sh`, which passes its own vmoptions via `IDEA_VM_OPTIONS` and verifies paths, version, and jar sha256 from the IDE's log |
 | A red run looked valid but nobody could say which plugin bytes the IDE had loaded | the broken and real builds were both `SNAPSHOT` | `build-broken-plugin.sh` stamps `-broken-<stamp>` into the version; the harness records `pluginVersion`/`pluginZipSha256`; the parser rejects an unstamped red or a stamped green |
 | `#8845` did not reproduce on IU 262 but did on IU 252, the build in the issue | the platform changed how `File > Open` picks an open processor | pin `ide.version` from the issue in the spec's Fixture; on 25x use `DART_PLUGIN_VERSION=506.1.0` (needs LSP4IJ, which `Setup` installs) |
+| On IU 252 the project opened but nothing rendered for 2+ minutes: Project tree "loading…", no toolbar actions, Driver screenshots timing out | 2025.2 defaults to out-of-process JCEF; under Xvfb the `cef_server` handshake for the auto-opened `README.md` Markdown preview blocked the EDT (thread dumps: `MarkdownJCEFHtmlPanel` → `CefServer`) | `Setup.kt` sets `jcef.remote.enabled=false` on Linux; a frozen EDT looks like a plugin failure, so check `monitoring-thread-dumps-ide/` before blaming the plugin |
