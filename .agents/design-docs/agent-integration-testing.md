@@ -301,6 +301,21 @@ oracle names the blocking frame (for example the EDT parked in
 Every run records logs, screenshots, the failure reason, the resolved IDE
 build, and wall-clock time in the report.
 
+**Build identity.** A red or green result is only as good as the knowledge of
+which plugin bytes the IDE loaded. Broken builds are therefore stamped with a
+`-broken-<stamp>` version suffix that the IDE itself reports (`idea.log`,
+Settings › Plugins), the harness records the reported version and the zip's
+sha256 in `run-result.json`, and the classifier rejects a red without the stamp
+or a green with it.
+
+**Witness mode.** After certification the user can ask to see the before and
+after themselves. The skill launches the same IDE build with the same broken
+and then the same real plugin in a private sandbox, verifies from the running
+IDE's log that the intended build loaded (or kills it), tells the user the
+spec's steps and expected outcome, and files the log evidence next to the
+automated runs. A disagreement between what the user saw and what the test
+reported is a finding.
+
 ### 5.8 Diagnosis and repair policy
 
 The skill classifies each failure into one of three buckets:

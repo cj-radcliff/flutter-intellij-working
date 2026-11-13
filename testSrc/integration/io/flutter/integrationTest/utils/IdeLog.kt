@@ -32,6 +32,12 @@ object IdeLog {
   val allowlist: List<Regex> = listOf(
     // IDE Starter installs plugins into a fresh sandbox; the platform logs this once when the plugin cache is cold.
     Regex("Plugin descriptor .* is not found in cache"),
+    // Dart plugin 506.1.0 on IntelliJ IDEA 2025.2 (IU 252.28238.7): the Dart plugin's coroutines (CoroutineName
+    // com.jetbrains.lang.dart.analyzer.DartAnalysisServerService, ...DartToolingDaemonService) die in
+    // kotlinx.coroutines' debug probes with "Debug metadata version mismatch. Expected: 1, got 2" because Dart is
+    // compiled with a newer Kotlin than the platform's stdlib. No io.flutter frames; the same entries appear in a
+    // hand-run IDE (witness session 2026-11-13) with no visible effect. Approved by Cory for T4 certification on 252.
+    Regex("Debug metadata version mismatch\\. Expected: 1, got 2"),
   )
 
   /** Size of [log] now, to pass as `sinceByte` later so only this test's lines are read. */

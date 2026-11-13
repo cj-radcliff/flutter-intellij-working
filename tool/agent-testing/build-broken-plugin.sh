@@ -96,8 +96,17 @@ describe=("start=$start_rev")
 for sha in "${reverts[@]:-}"; do
   [[ -n "$sha" ]] || continue
   log "reverting $sha"
-  git -C "$wt" revert --no-commit --no-edit "$sha" >&2 || {
-    log "revert of $sha conflicts; see $wt (use --keep to inspect)"; keep=1; exit 3; }
+  if ! git -C "$wt" revert --no-commit --no-edit "$sha" >&2; then
+    # A conflict only in documentation (CHANGELOG.md and the like) doesn't affect the plugin; keep HEAD's copy and
+    # carry on. Any conflict in code is a real one: stop and leave the worktree for inspection.
+    conflicted="$(git -C "$wt" diff --name-only --diff-filter=U)"
+    if [[ -n "$conflicted" ]] && ! grep -v -E '\.md$|^CHANGELOG' <<<"$conflicted" >/dev/null; then
+      log "revert of $sha conflicts only in docs ($(tr '\n' ' ' <<<"$conflicted")); keeping HEAD's copy"
+      while IFS= read -r f; do git -C "$wt" checkout HEAD -- "$f" && git -C "$wt" add -- "$f"; done <<<"$conflicted"
+    else
+      log "revert of $sha conflicts in code ($(tr '\n' ' ' <<<"$conflicted")); see $wt (use --keep to inspect)"; keep=1; exit 3
+    fi
+  fi
   describe+=("revert=$sha")
 done
 for p in "${patches[@]:-}"; do
@@ -128,5 +137,13 @@ zip_src="$(ls -1 "$wt"/$zip_glob 2>/dev/null | head -n1 || true)"
 [[ -n "$zip_src" ]] || { log "no zip produced under $zip_glob"; keep=1; exit 4; }
 zip_dst="$out/$(basename "${zip_src%.zip}")-broken-$stamp.zip"
 cp "$zip_src" "$zip_dst"
+
+# Stamp the plugin version with "-broken-<stamp>" so this build can never be mistaken for the real one: the suffix
+# shows in idea.log ("Loaded custom plugins: ... Flutter (SNAPSHOT-broken-...)"), in Settings > Plugins, and in
+# run-result.json, where parse_run_result.py requires it for red and rejects it for green.
+if [[ "$repo" == flutter ]]; then
+  stamped="$(python3 "$(dirname "$(realpath "$0")")/stamp_plugin_version.py" "$zip_dst" "broken-$stamp")"
+  log "plugin version stamped: $stamped"
+fi
 log "zip: $zip_dst"
 echo "$zip_dst"

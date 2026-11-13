@@ -17,6 +17,9 @@ import com.intellij.driver.sdk.waitFor
 import com.intellij.driver.sdk.waitForIndicators
 import com.intellij.ide.starter.driver.engine.runIdeWithDriver
 import com.intellij.ide.starter.project.LocalProjectInfo
+import com.intellij.ide.starter.project.NoProject
+import com.intellij.driver.sdk.ui.components.common.FileChooserDialogUi
+import com.intellij.driver.sdk.ui.components.common.welcomeScreen
 import io.flutter.integrationTest.utils.Platform
 import io.flutter.integrationTest.utils.RunResult.Phase
 import io.flutter.integrationTest.utils.createFlutterProjectWithCli
@@ -69,8 +72,12 @@ abstract class ExistingProjectUITest(private val packageName: String) : FlutterI
     }
   }
 
-  /** Starts the IDE on [projectDir] and waits until the project is open and indexed. */
-  protected fun startIdeOnProject() {
+  /**
+   * Starts the IDE on [projectDir] and, by default, waits until the project is open and indexed. Pass
+   * `waitForReady = false` when the project opening itself is what the test checks (then call [waitForProjectReady]
+   * inside the oracle, so "no project window appeared" is an oracle failure, not a setup failure).
+   */
+  protected fun startIdeOnProject(waitForReady: Boolean = true) {
     println("Opening existing project $projectDir")
     step(
       "Open the existing Flutter project",
@@ -79,11 +86,121 @@ abstract class ExistingProjectUITest(private val packageName: String) : FlutterI
     )
     startIde(Setup.setupTestContextIU262(javaClass.simpleName, LocalProjectInfo(projectDir))) { it.runIdeWithDriver() }
     result.currentPhase = Phase.SETUP
-    waitForProjectReady()
-    // The Trial tab usually opens while the project loads, but can arrive shortly after; poll briefly here and again
-    // when opening files or polling conditions in [dismissInterruptions].
-    val deadline = System.currentTimeMillis() + 3_000
-    while (!closeTrialTab() && System.currentTimeMillis() < deadline) Thread.sleep(500)
+    if (waitForReady) waitForProjectReady()
+  }
+
+  /**
+   * Waits for the project frame to appear and background indicators (indexing) to finish, retrying a few times while
+   * the frame settles, then closes the Trial tab if it opened.
+   */
+  protected fun waitForProjectReady(attempts: Int = 3, frameTimeout: Duration = 2.minutes) {
+    repeat(attempts) { attempt ->
+      try {
+        inFrame {
+          waitFound(frameTimeout)
+          driver.waitForIndicators(5.minutes)
+        }
+        println("Project is open and indexed.")
+        // The Trial tab usually opens while the project loads, but can arrive shortly after; poll briefly here and
+        // again when opening files or polling conditions in [dismissInterruptions].
+        val deadline = System.currentTimeMillis() + 3_000
+        while (!closeTrialTab() && System.currentTimeMillis() < deadline) Thread.sleep(500)
+        return
+      }
+      catch (e: Exception) {
+        if (attempt == attempts - 1) throw e
+        println("Project frame not stable yet (${e.javaClass.simpleName}); retrying")
+        Thread.sleep(5_000)
+      }
+    }
+  }
+
+  /** True while the IDE shows its welcome screen (no project frame). */
+  protected fun welcomeScreenShowing(): Boolean = runCatching {
+    driver.ui.xx("//div[@class='FlatWelcomeFrame']").list().isNotEmpty()
+  }.getOrDefault(false)
+
+  /**
+   * Starts the IDE with **no** project, on the welcome screen. Use with [openProjectFromWelcomeScreen] when the test is
+   * about opening the project the way a user does (*File > Open*), rather than about what happens once it's open.
+   */
+  protected fun startIdeOnWelcomeScreen() {
+    println("Starting the IDE on the welcome screen (project to open later: $projectDir)")
+    startIde(Setup.setupTestContextIU262(javaClass.simpleName, NoProject)) { it.runIdeWithDriver() }
+    result.currentPhase = Phase.SETUP
+    driver.ui.welcomeScreen { waitFound(2.minutes) }
+    println("Welcome screen is showing")
+  }
+
+  /**
+   * Clicks *Open* on the welcome screen, types [projectDir] into the file chooser, and confirms: the user's
+   * *File > Open* path, which goes through the IDE's `ProjectOpenProcessor` chain. Returns once the dialog has closed;
+   * it does not wait for a project window, so a test can make "a window appears" its oracle.
+   */
+  protected fun openProjectFromWelcomeScreen() {
+    driver.ui.welcomeScreen { openProjectButton.click() }
+    val chooser = driver.ui.x("//div[@class='MyDialog' and contains(@title, 'Open')]", FileChooserDialogUi::class.java)
+    chooser.waitFound(30.seconds)
+    chooser.selectFolder(projectDir)
+    chooser.okButton.click()
+    waitFor("the Open dialog to close", 30.seconds, 500.milliseconds) { chooser.notPresent() }
+  }
+
+  /**
+   * Selects [dir] in the file chooser by walking its folder tree row by row: find the row for each path segment
+   * (below the previous one), expand it, wait for the next segment's row to appear (children load lazily), and
+   * select the last one. This mirrors clicking the expanders. The 2026.2 chooser has no path text field (typing goes to
+   * the tree's speed search), and Driver's path-based helpers only see nodes that are already expanded, so rows are
+   * the dependable handle. Fails with a hierarchy dump if a segment never appears.
+   */
+  protected fun FileChooserDialogUi.selectFolder(dir: Path) {
+    val tree = fileTree
+    tree.waitFound(30.seconds)
+    // The fixture handle goes stale when the tree model changes (DriverIllegalStateException on valueAt), so it is
+    // re-fetched for every call.
+    val segments = listOf("/") + dir.toAbsolutePath().normalize().map { it.toString() }
+    println("Open dialog: navigating ${segments.joinToString(" > ")}")
+
+    fun rowOf(text: String, after: Int): Int? {
+      var row = after + 1
+      while (row < 5_000) {
+        val value = runCatching { tree.fixture.valueAt(row) }.getOrNull() ?: return null
+        if (value == text) return row
+        row++
+      }
+      return null
+    }
+
+    var previous = -1
+    for ((i, segment) in segments.withIndex()) {
+      var row = -1
+      try {
+        waitFor("'$segment' to appear in the folder tree", 30.seconds, 500.milliseconds) {
+          row = rowOf(segment, previous) ?: -1
+          row >= 0
+        }
+      }
+      catch (e: Exception) {
+        probe("open-dialog-missing-$segment")
+        val below = (previous + 1 until previous + 40).map { r -> runCatching { tree.fixture.valueAt(r) }.getOrElse { "<${it.javaClass.simpleName}: ${it.message?.take(60)}>" } }
+        throw AssertionError("The Open dialog's folder tree never showed '$segment' below row $previous; rows there: $below", e)
+      }
+      if (i < segments.size - 1) {
+        // Expand only if collapsed: the dialog opens with the home directory's ancestors already expanded, and
+        // toggling one of those shut would hide the rest of the path.
+        val nextValue = runCatching { tree.fixture.valueAt(row + 1) }.getOrNull()
+        val alreadyExpanded = nextValue != null && segments.getOrNull(i + 1) == nextValue
+        if (!alreadyExpanded) tree.fixture.expandRow(row)
+      }
+      else {
+        tree.fixture.selectRow(row)
+      }
+      previous = row
+    }
+    waitFor("the Open dialog to select ${dir.fileName}", 10.seconds, 500.milliseconds) {
+      tree.collectSelectedPaths().any { it.path.lastOrNull() == dir.fileName.toString() }
+    }
+    println("Open dialog: selected ${dir.fileName}")
   }
 
   /** Runs [action] inside the project frame. */
@@ -93,9 +210,9 @@ abstract class ExistingProjectUITest(private val packageName: String) : FlutterI
 
   /** Opens [relativePath] (relative to the project root) in an editor and waits for code analysis. */
   protected fun openProjectFile(relativePath: String) {
-    closeTrialTab()
+    dismissInterruptions()
     driver.openFile(relativePath)
-    closeTrialTab()
+    dismissInterruptions()
   }
 
   /** The editor for [fileName], e.g. `main.dart`. */
@@ -228,21 +345,4 @@ abstract class ExistingProjectUITest(private val packageName: String) : FlutterI
       .onFailure { println("Could not stop the app (${it.message}); it stops when the IDE closes.") }
   }
 
-  private fun waitForProjectReady(attempts: Int = 3) {
-    repeat(attempts) { attempt ->
-      try {
-        inFrame {
-          waitFound(2.minutes)
-          driver.waitForIndicators(5.minutes)
-        }
-        println("Project is open and indexed.")
-        return
-      }
-      catch (e: Exception) {
-        if (attempt == attempts - 1) throw e
-        println("Project frame not stable yet (${e.javaClass.simpleName}); retrying")
-        Thread.sleep(5_000)
-      }
-    }
-  }
 }

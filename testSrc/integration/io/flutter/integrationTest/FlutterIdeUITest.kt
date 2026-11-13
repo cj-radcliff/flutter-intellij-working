@@ -119,7 +119,53 @@ abstract class FlutterIdeUITest {
     }
     result.pluginLoaded = true
     result.pluginVersion = runCatching { driver.getPlugin("io.flutter")?.getVersion() }.getOrNull()
-    println("Plugins loaded: io.flutter ${result.pluginVersion}, Dart ${runCatching { driver.getPlugin("Dart")?.getVersion() }.getOrNull()}")
+    // Build identity gate: the IDE must report the version carried by the zip we asked Starter to install. Broken
+    // builds are stamped "-broken-<stamp>" by build-broken-plugin.sh, so this catches a stale sandbox, an ignored
+    // -Pflutter.plugin.zip, or a Marketplace copy standing in for ours, before any step runs.
+    val zip = System.getProperty("flutter.plugin.zip")?.takeIf { it.isNotBlank() } ?: System.getProperty("path.to.build.plugin")
+    if (zip != null) {
+      result.pluginZip = zip
+      result.pluginZipSha256 = runCatching { sha256(java.io.File(zip)) }.getOrNull()
+      val expected = runCatching { pluginVersionInZip(java.io.File(zip)) }.getOrNull()
+      if (expected != null && expected != result.pluginVersion) {
+        result.fail(Phase.SETUP, "plugin-identity", "IDE loaded Flutter ${result.pluginVersion}, but $zip carries $expected")
+        error("Build identity mismatch: the IDE loaded Flutter ${result.pluginVersion}, but the zip to install ($zip) carries $expected. " +
+              "The IDE under test is not running the build this run is about.")
+      }
+    }
+    println("Plugins loaded: io.flutter ${result.pluginVersion} (from $zip, sha256 ${result.pluginZipSha256}), " +
+            "Dart ${runCatching { driver.getPlugin("Dart")?.getVersion() }.getOrNull()}")
+  }
+
+  /** The `<version>` in META-INF/plugin.xml of the plugin's main jar inside [zip]; what the IDE should report. */
+  private fun pluginVersionInZip(zip: java.io.File): String? {
+    java.util.zip.ZipFile(zip).use { outer ->
+      val jarEntry = outer.entries().asSequence().firstOrNull {
+        Regex("""^[^/]+/lib/flutter-intellij[^/]*\.jar$""").matches(it.name) && !it.name.contains("searchableOptions")
+      } ?: return null
+      java.util.zip.ZipInputStream(outer.getInputStream(jarEntry)).use { jar ->
+        generateSequence { jar.nextEntry }.forEach { e ->
+          if (e.name == "META-INF/plugin.xml") {
+            val xml = jar.readBytes().toString(Charsets.UTF_8)
+            return Regex("<version>([^<]*)</version>").find(xml)?.groupValues?.get(1)
+          }
+        }
+      }
+    }
+    return null
+  }
+
+  private fun sha256(file: java.io.File): String {
+    val md = java.security.MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input ->
+      val buf = ByteArray(1 shl 16)
+      while (true) {
+        val n = input.read(buf)
+        if (n < 0) break
+        md.update(buf, 0, n)
+      }
+    }
+    return md.digest().joinToString("") { "%02x".format(it) }
   }
 
   @AfterEach

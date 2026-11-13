@@ -38,6 +38,8 @@ class RunResult(val testName: String) {
 
   data class Entry(val id: String, val title: String, val trigger: Boolean = false) {
     var status: String = "pending"
+    /** `assertion` when the block failed on an AssertionError (a real check), `error` for any other exception. */
+    var kind: String? = null
     var message: String? = null
     var millis: Long = 0
   }
@@ -49,9 +51,12 @@ class RunResult(val testName: String) {
   var bundleSha256: String? = null
   var pluginLoaded: Boolean = false
   var pluginVersion: String? = null
+  var pluginZip: String? = null
+  var pluginZipSha256: String? = null
   var testsAborted: Int = 0
   var failurePhase: Phase = Phase.NONE
   var failedId: String? = null
+  var failedKind: String? = null
   var failureMessage: String? = null
   var freeze: Freeze? = null
   val ideaLogSevere = mutableListOf<String>()
@@ -68,10 +73,11 @@ class RunResult(val testName: String) {
   private var written = false
 
   /** Records a failure in [phase] unless an earlier failure was already recorded (the first failure is the one that counts). */
-  fun fail(phase: Phase, id: String?, message: String?) {
+  fun fail(phase: Phase, id: String?, message: String?, kind: String = "assertion") {
     if (failurePhase != Phase.NONE) return
     failurePhase = phase
     failedId = id
+    failedKind = kind
     failureMessage = message?.let(::firstLine)
   }
 
@@ -88,8 +94,9 @@ class RunResult(val testName: String) {
     }
     catch (t: Throwable) {
       entry.status = "failed"
+      entry.kind = if (isAssertion(t)) "assertion" else "error"
       entry.message = summarize(t)
-      fail(phase, entry.id, "${entry.title}: ${summarize(t)}")
+      fail(phase, entry.id, "${entry.title}: ${summarize(t)}", entry.kind!!)
       throw t
     }
     finally {
@@ -119,6 +126,8 @@ class RunResult(val testName: String) {
     field("bundleSha256", bundleSha256)
     field("pluginLoaded", pluginLoaded)
     field("pluginVersion", pluginVersion)
+    field("pluginZip", pluginZip)
+    field("pluginZipSha256", pluginZipSha256)
     field("testsStarted", 1)
     field("testsSucceeded", if (failurePhase == Phase.NONE) 1 else 0)
     field("testsAborted", testsAborted)
@@ -127,6 +136,7 @@ class RunResult(val testName: String) {
     field("probes", probes)
     field("failurePhase", failurePhase.name)
     field("failedId", failedId)
+    field("failedKind", failedKind)
     field("failureMessage", failureMessage)
     field("ideaLogSevere", ideaLogSevere)
     field("leakedProcesses", leakedProcesses)
@@ -138,7 +148,7 @@ class RunResult(val testName: String) {
   }
 
   private fun entryJson(e: Entry): Map<String, Any?> = linkedMapOf(
-    "id" to e.id, "title" to e.title, "trigger" to e.trigger, "status" to e.status, "message" to e.message, "millis" to e.millis,
+    "id" to e.id, "title" to e.title, "trigger" to e.trigger, "status" to e.status, "kind" to e.kind, "message" to e.message, "millis" to e.millis,
   )
 
   companion object {
@@ -147,6 +157,20 @@ class RunResult(val testName: String) {
     /** First non-blank line of [text], without ANSI colour codes, at most 500 characters. */
     fun firstLine(text: String): String =
       text.replace(ansi, "").lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() && !it.startsWith("----") }?.take(500) ?: ""
+
+    /**
+     * True when [t], or any cause under it, is an AssertionError: the block failed on one of its own checks, not on
+     * an exception from the harness or Driver. Starter wraps failures in `DriverWithContextError`, so the cause chain
+     * is what counts.
+     */
+    fun isAssertion(t: Throwable): Boolean {
+      var cause: Throwable? = t
+      while (cause != null) {
+        if (cause is AssertionError) return true
+        cause = cause.cause?.takeIf { it !== cause }
+      }
+      return false
+    }
 
     /**
      * The most useful one-line description of [t]: the innermost assertion error's message if there is one (Starter

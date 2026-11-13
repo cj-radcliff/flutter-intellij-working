@@ -1,6 +1,6 @@
 ---
 name: agent-testing-run-integration-test
-description: Certify an agent-authored integration test for the Flutter or Dart IntelliJ plugins by proving it fails on a deliberately broken plugin build and passes on the real one, classifying failures from run-result.json, repairing test defects within a budget without weakening the oracle, and producing an evidence report with logs, screenshots, and a walkthrough. Modes certify (red then green, for every new or changed test), repro (red only, for open bugs), and check (green only, for already-certified tests). Use after agent-testing-author-integration-test. Don't use to write specs or tests.
+description: Certify an agent-authored integration test for the Flutter or Dart IntelliJ plugins by proving it fails on a deliberately broken plugin build and passes on the real one, classifying failures from run-result.json, repairing test defects within a budget without weakening the oracle, and producing an evidence report with logs, screenshots, and a walkthrough. Modes certify (red then green, for every new or changed test), repro (red only, for open bugs), check (green only, for already-certified tests), and witness (the user runs the broken and the fixed build by hand in a verified sandbox). Use after agent-testing-author-integration-test. Don't use to write specs or tests.
 ---
 
 # Skill: Run and Certify an Integration Test
@@ -28,10 +28,32 @@ recorder.
 | `certify` | Every new or modified test, from any `agent-testing-*-to-spec` path | **Valid red** on the broken build, then **green** `N_green` times on the real build, same test bytes |
 | `repro` | Open bugs with no fix yet | **Valid red** on `HEAD`. Test is tagged `unvalidated-repro` until a fix passes `certify` |
 | `check` | Tests already certified (new IDE build, new OS, periodic run) | Green `N_green` times |
+| `witness` | The user wants to **see** the before and after with their own hands | Same two builds the automated runs used, each launched by `launch-ide.sh` and verified from its own log; a report per build |
 
 `N_red = 1` for deterministic faults; `3` when the spec's Requirements say
 intermittent or freeze. `N_green = 3` for `ui`, `5` for `platform`. A mixed
 green result is **flaky** and fails; report it, don't rerun until it passes.
+
+## Build identity: how anyone can tell which build ran
+
+Every claim of "red" or "green" rests on knowing which plugin bytes the IDE
+loaded. Three things make that checkable instead of assumed:
+
+- `build-broken-plugin.sh` stamps every broken build's version with
+  `-broken-<stamp>` (`SNAPSHOT-broken-20261113-030500`). The IDE prints it in
+  `idea.log` (`Loaded custom plugins: … Flutter (SNAPSHOT-broken-…)`), in
+  Settings › Plugins, and the harness writes it to `run-result.json` as
+  `pluginVersion`, next to `pluginZip` and `pluginZipSha256`.
+- `parse_run_result.py` refuses a red whose `pluginVersion` lacks the stamp
+  and a green that has it. A stale sandbox or an ignored `-Pflutter.plugin.zip`
+  therefore shows up as `environment`, never as a result.
+- `tool/agent-testing/launch-ide.sh` (witness mode, below) only hands the user
+  an IDE after proving from that IDE's log that the sandbox paths, the plugin
+  version, and the jar's sha256 are the ones asked for. It kills the IDE
+  otherwise.
+
+Quote the version and sha from these sources in the evidence report; never
+from what you intended to install.
 
 ## Workflow
 
@@ -167,6 +189,7 @@ bundle.sha256
 broken-build.diff    the revert, merge-base range, or fault patch
 red/run-result.json  + idea.log slice + screenshots
 green-1..N/          run-result.json each
+witness/<label>/     manifest.json, report output, idea.log slice (witness mode)
 walkthrough/         from the last green run (Linux); per-step screenshots elsewhere
 git-status.txt       `git status --porcelain src resources` after everything: must be empty
 ```
@@ -183,11 +206,63 @@ Summary table in `report.md`:
 | Green | 3/3; wall-clock each |
 | Repairs | count, what changed, why |
 | Plugin-off control | failed as expected / not run |
+| Build identity | `pluginVersion` + `pluginZipSha256` from red and green `run-result.json` |
+| Witness | builds the user ran by hand, what they saw, agrees with red/green? / not run |
 | Verdict | **certified** / unvalidated-repro / flaky / product finding / blocked |
 | Suggested commit message | |
 
 Report to the user with the verdict and the path. Commit to the local branch
 only if asked. Never push.
+
+### 7. Witness mode: the user sees it themselves
+
+Offer this after every `certify` or `repro`, and run it whenever the user
+asks to "see the bug", "try the broken build", "run before and after", or
+doubts a result. It is the human check on the automated proof, and it uses
+the **same** builds, IDE version, Dart version, and project the test used, so
+what the user sees is what the test saw.
+
+Preconditions: the IDE build is pinned and in Starter's cache (any run of the
+test with `-Pide.version` put it there), the broken zip from step 2 still
+exists, and the real plugin is built (`./gradlew buildPlugin` →
+`build/distributions/Flutter.zip`). On 25x IDEs pass `--dart-version 506.1.0`
+(Dart 510+ needs 253+); the launcher refuses an incompatible Dart.
+
+For each build, in this order (broken first, so the fix is seen against the bug):
+
+1. Close any IDE from the same build; the launcher refuses to start a second.
+2. Launch and let the launcher verify:
+   ```bash
+   tool/agent-testing/launch-ide.sh --label broken --ide-version <pinned> \
+     --plugin-zip <broken.zip> --project <fixture project> [--delete-idea-dir] [--dart-version 506.1.0]
+   ```
+   It prints a `VERIFIED` banner naming the sandbox, the version the IDE
+   reported, and the jar sha256, or exits 1 with the mismatch and the IDE
+   killed. Don't hand the user an unverified IDE and don't "fix" a mismatch by
+   editing the sandbox; find out why the wrong bytes loaded.
+3. Tell the user exactly what to do (the spec's **Steps**, in user terms), what
+   the spec's oracle says they should see on this build, and how to confirm
+   the build in the IDE (Settings › Plugins shows the `-broken-` version).
+   Then wait; don't drive the IDE for them.
+4. When they close it, collect the log evidence:
+   ```bash
+   tool/agent-testing/launch-ide.sh report <sandbox> --grep '<spec-specific marker>'
+   ```
+   and save `manifest.json`, the report output, and the `idea.log` slice to
+   `witness/<label>/` in the evidence directory.
+5. Repeat with `--label fixed --plugin-zip build/distributions/Flutter.zip`.
+
+Add a **Witness** row to the report's summary table: which builds the user
+saw, what they observed, and whether it matched the automated red and green.
+A disagreement between the user and the test is a finding; record it and stop.
+
+Pitfalls the launcher exists for, so you recognise them if something else is
+used: Starter leaves `<ide-home>.vmoptions` beside the IDE pointing
+`-Didea.*.path` at the **last test's** sandbox, and `-D` beats
+`idea.properties` and `IDEA_PROPERTIES`; a sandbox reused across builds keeps
+the old plugin; a project opened once grows an `.idea/` that changes the next
+open; two IDEs on one system dir corrupt both. Every one of these makes
+"broken" and "fixed" silently identical.
 
 ## Hard rules
 

@@ -88,7 +88,10 @@ class Setup {
      * `integration` Gradle task), falling back to `gradle.properties` when running tests directly from the IDE.
      */
     private val dartPluginVersion: String by lazy {
-      System.getProperty("dart.plugin.version")?.trim()?.takeIf { it.isNotEmpty() }
+      // DART_PLUGIN_VERSION overrides the version for the IDE under test only (the plugin is still built against
+      // gradle.properties' dartPluginVersion). Needed when certifying on an older IDE build: Dart 510+ requires 253.
+      System.getenv("DART_PLUGIN_VERSION")?.trim()?.takeIf { it.isNotEmpty() }
+        ?: System.getProperty("dart.plugin.version")?.trim()?.takeIf { it.isNotEmpty() }
         ?: Properties().apply {
           Files.newBufferedReader(Git.getRepoRoot().resolve("gradle.properties")).use(::load)
         }.getProperty("dartPluginVersion")?.trim()?.takeIf { it.isNotEmpty() }
@@ -179,11 +182,21 @@ class Setup {
           println("Installing the Flutter plugin from $pluginPath")
           plugins.installPluginFromPath(Paths.get(pluginPath))
         }
+        // Dart depends on LSP4IJ (the Dart plugin's LSP client); it isn't bundled with the IDE, so install it from
+        // the Marketplace at the version the plugin builds against (lsp4ij in libs.versions.toml, forwarded as
+        // lsp4ij.plugin.version), unless LSP4IJ_PLUGIN_VERSION overrides it.
+        val lsp4ijVersion = System.getenv("LSP4IJ_PLUGIN_VERSION")?.trim()?.takeIf { it.isNotEmpty() }
+                            ?: System.getProperty("lsp4ij.plugin.version")?.trim()?.takeIf { it.isNotEmpty() }
+        if (lsp4ijVersion != null) {
+          println("Installing LSP4IJ $lsp4ijVersion")
+          plugins.installPluginFromPluginManager("com.redhat.devtools.lsp4ij", lsp4ijVersion)
+        }
         if (localDartPlugin != null) {
           println("Installing the Dart plugin from $localDartPlugin")
           plugins.installPluginFromPath(Paths.get(localDartPlugin))
         }
         else {
+          println("Installing the Dart plugin $dartPluginVersion from the Marketplace")
           plugins.installPluginFromPluginManager("Dart", dartPluginVersion)
         }
         withBuildTool<GradleBuildTool>()
@@ -237,6 +250,11 @@ class Setup {
           SystemInfo.isLinux -> {
             // Linux specific settings
             addSystemProperty("ide.browser.jcef.enabled", true)
+            // Keep JCEF in-process. IU 2025.2 defaults to out-of-process JCEF (registry
+            // ide.browser.jcef.out-of-process.enabled=true); under Xvfb the cef_server handshake that the Markdown
+            // preview of an auto-opened README.md triggers blocked the EDT for minutes (T4 green #1, 2026-11-13), so
+            // nothing rendered and the device selector never appeared. On a desktop the same IDE came up in-process.
+            addSystemProperty("jcef.remote.enabled", false)
             addSystemProperty("ide.native.launcher", false) // Avoid launcher issues on Linux
 
             // Force X11 (XWayland on Wayland sessions): the Driver's java.awt.Robot input does not work with JBR's native WLToolkit.
