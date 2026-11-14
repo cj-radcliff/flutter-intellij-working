@@ -13,6 +13,11 @@ enforce standard modern Java/Kotlin coding conventions, but strictly police the 
     - `[NIT]`: Idiomatic improvements or minor naming suggestions.
 - **Focus:** Prioritize logic, performance on the UI thread, and architectural consistency.
 - **No Empty Praise:** Do not leave "Looks good" or "Nice change" comments. If there are no issues, leave no comments.
+- **Review the Change:** Comment on what the PR adds or changes, including effects of its deletions. Don't ask
+  for refactors (method length, de-duplication, extracting helpers) of code the PR only moves or touches
+  incidentally. For a revert (title starts with "Revert", or the PR restores previously landed code), don't
+  re-review the restored code. If you see a serious bug in code the PR didn't change, mention it once as
+  pre-existing and suggest a follow-up issue rather than a change in this PR.
 - **Copyright Headers:** Ensure all new source code files (`.java`, `.kt`, `.dart`, `.sh`) have a proper copyright header (e.g., `Copyright 2026 The Chromium Authors`). Do NOT require copyright headers on documentation, markdown (`.md`), YAML, JSON, or agent skill documents (`SKILL.md`). Flag any missing headers on source code files as `[MUST-FIX]`.
 
 ## 2. IntelliJ Platform Best Practices
@@ -20,7 +25,7 @@ enforce standard modern Java/Kotlin coding conventions, but strictly police the 
 - **Threading Model:** - NEVER perform heavy operations (I/O, complex PSI searches) on the **Event Dispatch Thread (EDT)**.
     - Wrap data access in `ReadAction.run()` or `ReadAction.compute()`.
     - Wrap modifications in `WriteAction.run()`.
-    - In `AnAction`, ensure `getActionUpdateThread()` is implemented for 2022.3+ compatibility.
+    - In `AnAction`, ensure `getActionUpdateThread()` is implemented explicitly.
 - **Performance:**
     - In loops over PSI elements or Virtual Files, always call `ProgressManager.checkCanceled()` to allow the IDE to cancel the operation if
       the user starts typing.
@@ -29,6 +34,9 @@ enforce standard modern Java/Kotlin coding conventions, but strictly police the 
       background processes that are created but not properly registered with a parent `Disposable` via `Disposer.register()`.
     - Flag the use of deprecated `ProjectComponent` or `ApplicationComponent`. Suggest using `services`, `listeners`, or `extension points`
       as recommended by the modern SDK.
+- **Supported Platform Versions:** The plugin supports IntelliJ Platform build 252 (2025.2) and newer (`sinceBuild` in
+  `gradle.properties`). Don't flag an API as unavailable on older IDEs unless it was introduced after build 252, and
+  never suggest a `@Deprecated` API as a "more compatible" replacement.
 - **Backward Compatibility:** Avoid using `@ApiStatus.Internal` or `@ApiStatus.ScheduledForRemoval` APIs unless strictly necessary.
 - **Logging:**
     - Reject any use of `System.out.println` or `System.err.println` for logging in `src/` code (integration tests may use them for
@@ -44,6 +52,11 @@ enforce standard modern Java/Kotlin coding conventions, but strictly police the 
       `Analytics.report(AnalyticsData.forAction(this, e))`.
 
 ## 3. Idiomatic Language Standards
+
+- **Imports:** In Java, Kotlin, and Gradle Kotlin DSL code, use imports instead of fully qualified names. This
+  includes code in your own suggestions: add the import instead of writing e.g.
+  `com.intellij.openapi.application.ReadAction.compute(...)` inline. A fully qualified name is fine only to
+  disambiguate two types with the same simple name, or where a name must be a string (e.g. `plugin.xml`).
 
 ### Dart
 
@@ -66,7 +79,6 @@ enforce standard modern Java/Kotlin coding conventions, but strictly police the 
 - Prefer **Composition over Inheritance** for plugin components.
 - Avoid using reflection without a strong justification.
 - Avoid stray `TODO` or `FIXME` comments without justification.
-- Use imports instead of fully qualified names.
 
 ## 4. Code Quality & Maintainability
 
@@ -76,3 +88,7 @@ enforce standard modern Java/Kotlin coding conventions, but strictly police the 
 - **Descriptive Pull Request:** Contributors should include the information recommended in the pull request template (In
   `.github/PULL_REQUEST_TEMPLATE.md`Ï)
 - **Changelog Entries:** Enforce that there is a changelog entry for all user-facing changes. Entries must strictly match the existing grammatical style using descriptive, state-based phrases (typically starting with gerunds, nouns, or verbs like *Avoid* / *Support* / *Log* / *Prevent*) rather than starting with the imperative verb *Fix* or *Add*.
+  - Each entry ends with this pull request's number, e.g. `(#9203)`. Flag an entry whose trailing reference is an issue number or issue link instead (often the issue named in the PR title), and suggest the PR number. Issue references are fine as extra context earlier in the entry, as long as the PR number comes last.
+- **Approved GitHub Actions:** Ensure any additions or changes to GitHub Action workflows (`.github/workflows/*.yml`) only use actions that are from a repository owned by the enterprise, created by GitHub, verified in the GitHub Marketplace, or match one of the patterns in the approved actions spreadsheet: [Approved GitHub Actions](https://docs.google.com/spreadsheets/d/1P7PQbm0AsR-DpgH_8-YqFThfcrc9EPVv6S3WCu50xl4/edit?gid=0#gid=0). Actions not meeting these criteria will cause the GitHub CI to fail.
+- **Portability:** Flag any references to local directories (e.g., `/Users/username/...`), hardcoded LDAP/usernames, or environment-specific paths that could make tools, scripts, or agent skills less portable.
+- **Agent Skills Documentation:** Enforce that any newly created or added agent skills (i.e., new `SKILL.md` files) are documented in the repository's `README.md`.
