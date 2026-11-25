@@ -6,6 +6,7 @@
 package io.flutter.actions;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
@@ -18,6 +19,9 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Optional;
 
 public class RefreshToolWindowAction extends DumbAwareAction {
+  /** The plugin.xml id. Tool windows create their own unregistered instances, so report with this id explicitly. */
+  public static final String ID = "io.flutter.RefreshToolWindow";
+
   private String toolWindowId;
 
   public RefreshToolWindowAction() {
@@ -30,13 +34,18 @@ public class RefreshToolWindowAction extends DumbAwareAction {
   }
 
   @Override
+  public @NotNull ActionUpdateThread getActionUpdateThread() {
+    return ActionUpdateThread.BGT;
+  }
+
+  @Override
   public void actionPerformed(@NotNull AnActionEvent event) {
     final Project project = event.getProject();
     if (project == null) {
       return;
     }
 
-    Analytics.report(AnalyticsData.forAction(this, event));
+    Analytics.report(AnalyticsData.forAction(ID, event));
 
     Optional.ofNullable(
         FlutterUtils.embeddedBrowser(project))

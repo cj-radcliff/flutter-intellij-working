@@ -10,7 +10,8 @@ Contributing to Flutter Plugin for IntelliJ
     * [Configure "Project Structure" settings](#configure-project-structure-settings)
     * [Configure the Gradle settings](#configure-the-gradle-settings)
     * [Build and run the plugin](#build-and-run-the-plugin)
-  * [Provision Tool](#provision-tool)
+  * [When you need a Dart or Flutter SDK](#when-you-need-a-dart-or-flutter-sdk)
+    * [How CI provisions SDKs](#how-ci-provisions-sdks)
   * [Running plugin tests](#running-plugin-tests)
     * [Using test run configurations in IntelliJ](#using-test-run-configurations-in-intellij)
     * [Using the command line](#using-the-command-line)
@@ -28,7 +29,7 @@ We gladly accept contributions via GitHub pull requests!
 If you are new to coding IntelliJ plugins,
 here are a couple of links to get started:
 
-- [INTRODUCTION TO CREATING INTELLIJ IDEA PLUGINS](https://developerlife.com/2020/11/21/idea-plugin-example-intro/)
+- [INTRODUCTION TO CREATING INTELLIJ IDEA PLUGINS](https://developerlife.com/2020/11/20/idea-plugin-example-intro/)
 - [ADVANCED GUIDE TO CREATING INTELLIJ IDEA PLUGINS](https://developerlife.com/2021/03/13/ij-idea-plugin-advanced/)
 
 You must complete the [Contributor License Agreement](https://cla.developers.google.com/clas)
@@ -78,6 +79,7 @@ name and contact info to the [AUTHORS](AUTHORS) file.
       ```
 
 3. Set your `FLUTTER_SDK` path in the configuration file for your shell environment.
+    - Steps 3 to 5 are not needed to build or unit-test the plugin. You need them for the Dart tooling, integration tests, and trying the plugin with a real Flutter SDK. See [When you need a Dart or Flutter SDK](#when-you-need-a-dart-or-flutter-sdk).
     - For example, on macOS, the following works:
       Check where your Flutter SDK is installed:
       ```shell
@@ -249,31 +251,55 @@ To see a full list of available options and usage examples, run the task without
 ./gradlew runTarget
 ```
 
-## Provision Tool
+## When you need a Dart or Flutter SDK
 
-This is not currently required. However, for debugging unit tests, it may be handy; please ignore for now.
+Building, unit-testing, and verifying the plugin need only a JDK. Gradle
+downloads everything the plugin compiles against (the target IDE and the Dart
+plugin) from JetBrains' repositories, and nothing in `build.gradle.kts` runs
+`dart` or `flutter`. You need a Dart or Flutter SDK only for the tasks marked
+below.
 
-The Gradle build script currently assumes that some dependencies are present in the `artifacts` directory.
-This project uses an External Tool in IntelliJ to ensure the dependencies are present.
-It appears that external tools are not shareable.
-To make one, open the "Run Configuration" dialog and select "Flutter Plugin".
-Look at the "Before launch" panel. It probably displays an Unknown External Tool.
-Double-click that, then click the edit icon in the new panel (pencil).
-Set the name to "Provision". Set the values:
+| Task | Command | Needs | Why |
+| --- | --- | --- | --- |
+| Build the plugin | `./gradlew buildPlugin` | JDK | Gradle-only build. |
+| Unit tests | `./gradlew test` | JDK | Tests build fake SDK directories where they need one, and read files under `testData/` directly. |
+| Plugin verification | `./gradlew verifyPlugin` | JDK | Runs the IntelliJ Plugin Verifier on the built plugin. |
+| Integration tests | `./gradlew integration` | JDK, **Flutter SDK** | They create and run real Flutter projects. Set `FLUTTER_SDK` (`VmServiceTest` also accepts `-Dflutter.sdk` or `FLUTTER_ROOT`). Not run in CI. |
+| Plugin tool | `./bin/plugin generate`, `lint`, `deploy` | **Dart SDK** | `tool/plugin` is a Dart CLI. Run `dart pub get` at the repository root first. |
+| Grinder tasks | `dart tool/grind.dart check-urls`, `lint-skills` | **Dart SDK** | Dart scripts. Run `dart pub get` at the repository root first. |
+| Skills lint | `./tool/validate_skills.sh` | **Dart SDK** | Runs `skills_lint`. The script runs `dart pub get` itself. |
+| Try the plugin by hand | `./gradlew runIde` | JDK, **Flutter SDK** | The plugin needs a Flutter SDK, configured in the IDE, to create, run, or debug Flutter projects. Building and launching the IDE do not. |
 
-- Program: `/bin/bash`
-- Arguments: `bin/plugin test -s`
-- Working directory: `$ProjectFileDir$`
-    - You can select that from a list by clicking the "+" symbol in the field
+For the Dart tasks, any Dart SDK that satisfies the `sdk:` constraint in the
+root and `tool/plugin` `pubspec.yaml` files works, including the one bundled
+with Flutter. The root `pubspec.yaml` is a pub workspace that includes
+`tool/plugin`, so one `dart pub get` at the root covers both.
 
-There is a screenshot of this dialog in `resources/intellij/Provision.png`.
+### How CI provisions SDKs
 
-Save, close, and re-open the "Run Configuration" dialog.
-Confirm that the External Tool is named "Provision".
+- [`tool/provision_flutter.sh`](tool/provision_flutter.sh) downloads the pinned
+  Flutter SDK (`FLUTTER_VERSION`) to `../flutter` if it is missing.
+  [`update_flutter.yaml`](.github/workflows/update_flutter.yaml) bumps the pin,
+  and `CIIntegrityTest` checks that the script and pin exist.
+- **GitHub presubmit:** [`tool/github.sh`](tool/github.sh) provisions only what
+  each bot runs. `DART_BOT` and `CHECK_BOT` get Flutter (for its bundled Dart)
+  and one `dart pub get` at the repository root. `INTEGRATION_BOT` gets Flutter
+  and `FLUTTER_SDK`. `UNIT_TEST_BOT`, `VERIFY_BOT`, and the `presubmit` build
+  get only the JDK.
+- **GitHub Dart-only jobs:** `check-ai-config` in
+  [`presubmit.yaml`](.github/workflows/presubmit.yaml) and
+  [`check_urls.yaml`](.github/workflows/check_urls.yaml) install only the Dart
+  SDK, with `dart-lang/setup-dart`.
+- **Kokoro:** `setup` in [`tool/kokoro/setup.sh`](tool/kokoro/setup.sh), used by
+  the build and release jobs, prepares only Java and Gradle. `setup_flutter`
+  provisions Flutter and runs `dart pub get`, and only `tool/kokoro/test.sh`
+  calls it. No Kokoro job runs `test.sh` today. Keeping Flutter and pub out of
+  the build path is deliberate: the Kokoro mac VMs' IPv4 path to pub.dev has
+  been unreliable ([#9216](https://github.com/flutter/flutter-intellij/issues/9216)).
 
-If you know where the Application Support files are located for your version of IntelliJ,
-you can drop the definition into its `tools` directory before starting IntelliJ.
-The definition is in `resources/intellij/External Tools.xml`.
+When you add a CI step, provision only what that step runs: add Flutter or Dart
+setup next to the step that runs `flutter` or `dart` (for Kokoro, call
+`setup_flutter`), not to a shared setup that the build uses.
 
 ## Running plugin tests
 
@@ -307,6 +333,66 @@ To run unit tests on the command line:
 If you wanted to run a subset of the tests, you could do so this way.
 See the [Gradle docs](https://docs.gradle.org/current/userguide/java_testing.html)
 for more info about testing.
+
+## Plugin verification
+
+The [IntelliJ plugin verifier](https://github.com/JetBrains/intellij-plugin-verifier)
+checks the plugin against each supported IDE. To run it locally:
+
+```shell
+./gradlew verifyPlugin
+```
+
+### How verification is gated
+
+Two independent checks run in CI (the `VERIFY_BOT` branch of `tool/github.sh`),
+with a deliberate division of responsibility:
+
+1. **`verifyPlugin` decides what is severe.** Its `failureLevel` in
+   `build.gradle.kts` fails the build on compatibility problems, an invalid
+   plugin, and so on.
+2. **`check_verifier_baselines.sh` decides what is *new*.** It compares each
+   report against a committed baseline and reports anything not already known,
+   so a failure points at the specific issues that changed:
+
+   ```shell
+   ./tool/check_verifier_baselines.sh check
+   ```
+
+The script intentionally does **not** classify severity — that would duplicate
+`failureLevel` in a second place and the two would drift. Its contract is
+simply: anything new relative to the baseline is surfaced and fails.
+
+A few things worth knowing:
+
+- Baselines live in `tool/baseline/<IDE branch>/verifier-baseline.txt`, one per
+  platform branch (`252`, `253`, …). The branches are discovered from the
+  reports on disk, so verifying a branch with no committed baseline fails
+  loudly with "no baseline for IDE branch N" rather than silently skipping it.
+- Each baseline line is `<section><TAB><issue>`, which keeps the report section
+  visible in the diff so you can see at a glance what kind of finding changed.
+- Each baseline records the exact IDE build it was generated from, so when a
+  new EAP build introduces issues the report says so explicitly.
+- New issues are reported as job annotations and in the job summary, not just
+  buried in the log.
+
+> [!NOTE]
+> A new IDE build can introduce failures that no pull request caused. The
+> report names the IDE build and flags when it differs from the one the
+> baseline was recorded against, which usually makes this obvious.
+
+### Updating verifier baselines
+
+If new verification issues are found that match expected platform updates,
+update the baseline files and commit the result:
+
+```shell
+./tool/update_baselines.sh
+```
+
+> [!IMPORTANT]
+> Run this from the root directory of the repository. It runs the verifier once
+> per baselined platform version, so it takes a while.
 
 ## Adding platform sources
 

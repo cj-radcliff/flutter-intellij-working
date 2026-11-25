@@ -5,9 +5,6 @@
  */
 package io.flutter.actions;
 
-import com.intellij.notification.Notification;
-import com.intellij.notification.NotificationType;
-import com.intellij.notification.Notifications;
 import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.Project;
@@ -17,10 +14,8 @@ import com.jetbrains.lang.dart.analytics.AnalyticsData;
 import icons.FlutterIcons;
 import io.flutter.FlutterBundle;
 import io.flutter.FlutterConstants;
-import io.flutter.FlutterMessages;
 import io.flutter.run.FlutterReloadManager;
 import io.flutter.run.daemon.FlutterApp;
-import io.flutter.settings.FlutterSettings;
 import org.jetbrains.annotations.NotNull;
 
 public class RestartFlutterApp extends FlutterAppAction {
@@ -47,11 +42,12 @@ public class RestartFlutterApp extends FlutterAppAction {
       return;
     }
     var reloadManager = FlutterReloadManager.getInstance(project);
-    if (reloadManager != null) {
-      reloadManager.saveAllAndRestart(getApp(), FlutterConstants.RELOAD_REASON_MANUAL);
-    }
+    if (reloadManager == null) return;
 
-    var analyticsData = AnalyticsData.forAction(this, e);
-    Analytics.report(analyticsData);
+    reloadManager.saveAllAndRestart(getApp(), FlutterConstants.RELOAD_REASON_MANUAL);
+
+    // Report with ID: this per-app action isn't registered with the ActionManager, so
+    // AnalyticsData.forAction(this, e) would have a null id and the event would be dropped.
+    Analytics.report(AnalyticsData.forAction(ID, e.getPlace(), project));
   }
 }

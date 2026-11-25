@@ -145,7 +145,7 @@
         <reference ref="flutter.doctor"/>
       </group>
       <separator/>
-      <add-to-group group-id="ProjectViewPopupMenu" relative-to-action="AddToFavorites" anchor="before"/>
+      <add-to-group group-id="ProjectViewPopupMenu" relative-to-action="ProjectViewPopupMenuModifyGroup" anchor="before"/>
     </group>
 <!--    See comment at the top of FlutterExternalIdeActionGroup.-->
 <!--    <group id="FlutterExternalIdeActionGroup" class="io.flutter.actions.FlutterExternalIdeActionGroup">-->
@@ -156,7 +156,7 @@
 <!--        <reference ref="flutter.appcode.open"/>-->
 <!--      </group>-->
 <!--      <separator/>-->
-<!--      <add-to-group group-id="ProjectViewPopupMenu" relative-to-action="AddToFavorites" anchor="before"/>-->
+<!--      <add-to-group group-id="ProjectViewPopupMenu" relative-to-action="ProjectViewPopupMenuModifyGroup" anchor="before"/>-->
 <!--    </group>-->
     <group id="FlutterBuildActionGroup" class="io.flutter.actions.FlutterBuildActionGroup">
       <separator/>
@@ -285,7 +285,6 @@
     <postStartupActivity implementation="io.flutter.FlutterInitializer"/>
     <projectService serviceImplementation="io.flutter.run.daemon.DeviceService"/>
     <projectService serviceImplementation="io.flutter.run.daemon.DevToolsService"/>
-    <projectService serviceImplementation="io.flutter.dart.FlutterDartAnalysisServer"/>
     <projectService serviceImplementation="io.flutter.pub.PubRootCache"/>
     <backgroundPostStartupActivity implementation="io.flutter.sdk.FlutterProjectActivity"/>
 
@@ -302,8 +301,8 @@
     <programRunner implementation="io.flutter.run.test.FlutterTestRunner"/>
     <runLineMarkerContributor language="Dart" implementationClass="io.flutter.run.test.FlutterTestLineMarkerContributor"/>
 
-    <defaultLiveTemplatesProvider implementation="io.flutter.template.FlutterLiveTemplatesProvider"/>
-    <liveTemplateContext contextId="DART_TOPLEVEL" implementation="io.flutter.template.DartToplevelTemplateContextType"/>
+    <defaultLiveTemplates file="liveTemplates/flutter_miscellaneous.xml"/>
+    <liveTemplateContext contextId="DART_TOPLEVEL" baseContextId="DART" implementation="io.flutter.template.DartToplevelTemplateContextType"/>
 
     <!-- IDEA only -->
     <moduleBuilder builderClass="io.flutter.module.FlutterModuleBuilder"/>
@@ -345,7 +344,6 @@
 
     <projectService serviceImplementation="io.flutter.run.FlutterReloadManager" overrides="false"/>
     <projectService serviceImplementation="io.flutter.editor.FlutterSaveActionsManager" overrides="false"/>
-    <projectService serviceImplementation="io.flutter.editor.ActiveEditorsOutlineService" overrides="false"/>
 
     <iconProvider implementation="io.flutter.project.FlutterIconProvider" order="first"/>
 
@@ -366,11 +364,8 @@
 
     <registryKey defaultValue="" description="Launch local server for DevTools" key="flutter.local.devtools.dir"/>
     <registryKey defaultValue="" description="Local DevTools server arguments" key="flutter.local.devtools.args"/>
-  </extensions>
 
-  <!-- Dart Plugin extensions -->
-  <extensions defaultExtensionNs="Dart">
-    <completionExtension implementation="io.flutter.editor.FlutterCompletionContributor" order="last"/>
+    <completion.contributor language="Dart" implementationClass="io.flutter.editor.FlutterCompletionContributor" order="first" />
   </extensions>
 
 </idea-plugin>

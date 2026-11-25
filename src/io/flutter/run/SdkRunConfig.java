@@ -37,11 +37,11 @@ import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.xmlb.SkipDefaultValuesSerializationFilters;
 import com.intellij.util.xmlb.XmlSerializer;
 import com.jetbrains.lang.dart.ide.runner.DartConsoleFilter;
+import io.flutter.FlutterProjectDisposable;
 import io.flutter.FlutterUtils;
 import io.flutter.analytics.Analytics;
 import io.flutter.analytics.AnalyticsConstants;
 import io.flutter.console.FlutterConsoleFilter;
-import io.flutter.dart.FlutterDartAnalysisServer;
 import io.flutter.logging.PluginLogger;
 import io.flutter.run.common.RunMode;
 import io.flutter.run.daemon.FlutterApp;
@@ -204,7 +204,11 @@ public class SdkRunConfig extends LocatableConfigurationBase<LaunchState>
 
     final LaunchState launcher = new LaunchState(env, mainFile.getAppDir(), mainFile.getFile(), this, createAppCallback);
     addConsoleFilters(launcher, env, mainFile, null /* look up the module in an async read context */);
-    Analytics.recordRunOrDebugSession(AnalyticsConstants.MECHANISM_FLUTTER_APP, executor, getProject());
+    final String[] additionalArgs = launchFields.getAdditionalArgsParsed();
+    final String buildMode = Analytics.buildModeFor(FlutterLaunchMode.fromEnv(env), executor.getId(), additionalArgs);
+    final boolean hasFlavor = Analytics.hasFlavor(launchFields.getBuildFlavor(), additionalArgs);
+    launcher.setSessionReporter(device -> Analytics.recordRunOrDebugSession(
+      AnalyticsConstants.MECHANISM_FLUTTER_APP, executor, getProject(), buildMode, device, hasFlavor));
     return launcher;
   }
 
@@ -261,7 +265,7 @@ public class SdkRunConfig extends LocatableConfigurationBase<LaunchState>
         builder.addFilter(new UrlFilter());
         return null;
       })
-      .expireWith(FlutterDartAnalysisServer.getInstance(getProject()))
+      .expireWith(FlutterProjectDisposable.getInstance(getProject()))
       .submit(AppExecutorUtil.getAppExecutorService());
   }
 

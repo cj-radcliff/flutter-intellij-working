@@ -10,7 +10,6 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.Ref;
 import com.intellij.openapi.util.SystemInfo;
-import com.intellij.openapi.util.Version;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.Alarm;
 import com.intellij.util.concurrency.Semaphore;
@@ -23,9 +22,6 @@ import com.intellij.xdebugger.frame.XStackFrame;
 import com.intellij.xdebugger.impl.XDebugSessionImpl;
 import com.jetbrains.lang.dart.DartFileType;
 import io.flutter.logging.PluginLogger;
-import io.flutter.sdk.FlutterSdk;
-import io.flutter.sdk.FlutterSdkVersion;
-import io.flutter.settings.FlutterSettings;
 import io.flutter.utils.OpenApiUtils;
 import io.flutter.vmService.frame.DartAsyncMarkerFrame;
 import io.flutter.vmService.frame.DartVmServiceEvaluator;
@@ -41,12 +37,10 @@ import org.dartlang.vm.service.consumer.GetStackConsumer;
 import org.dartlang.vm.service.consumer.InvokeConsumer;
 import org.dartlang.vm.service.consumer.PauseConsumer;
 import org.dartlang.vm.service.consumer.RemoveBreakpointConsumer;
-import org.dartlang.vm.service.consumer.SetExceptionPauseModeConsumer;
 import org.dartlang.vm.service.consumer.SetIsolatePauseModeConsumer;
 import org.dartlang.vm.service.consumer.SuccessConsumer;
 import org.dartlang.vm.service.consumer.UriListConsumer;
 import org.dartlang.vm.service.consumer.VMConsumer;
-import org.dartlang.vm.service.consumer.VersionConsumer;
 import org.dartlang.vm.service.element.Breakpoint;
 import org.dartlang.vm.service.element.ElementList;
 import org.dartlang.vm.service.element.ErrorRef;
@@ -206,25 +200,16 @@ public class VmServiceWrapper implements Disposable {
       }
     });
 
-    FlutterSdkVersion flutterSdkVersion = null;
-    myDebugProcess.getSession();
-    final FlutterSdk flutterSdk = FlutterSdk.getFlutterSdk(myDebugProcess.getSession().getProject());
-    if (flutterSdk != null) {
-      flutterSdkVersion = flutterSdk.getVersion();
-    }
+    streamListen("ToolEvent", new SuccessConsumer() {
+      @Override
+      public void received(Success response) {
+      }
 
-    if (flutterSdkVersion != null && flutterSdkVersion.canUseToolEventStream()) {
-      streamListen("ToolEvent", new SuccessConsumer() {
-        @Override
-        public void received(Success response) {
-        }
-
-        @Override
-        public void onError(RPCError error) {
-          LOG.error("Error listening to ToolEvent stream: " + error);
-        }
-      });
-    }
+      @Override
+      public void onError(RPCError error) {
+        LOG.error("Error listening to ToolEvent stream: " + error);
+      }
+    });
   }
 
   private void streamListen(@NotNull String streamId, @NotNull SuccessConsumer consumer) {
@@ -284,41 +269,21 @@ public class VmServiceWrapper implements Disposable {
   }
 
   private void setIsolatePauseMode(@NotNull String isolateId, @NotNull ExceptionPauseMode mode, @NotNull IsolateRef isolateRef) {
-    if (supportsSetIsolatePauseMode()) {
-      SetIsolatePauseModeConsumer sipmc = new SetIsolatePauseModeConsumer() {
-        @Override
-        public void onError(RPCError error) {
-        }
+    SetIsolatePauseModeConsumer sipmc = new SetIsolatePauseModeConsumer() {
+      @Override
+      public void onError(RPCError error) {
+      }
 
-        @Override
-        public void received(Sentinel response) {
-        }
+      @Override
+      public void received(Sentinel response) {
+      }
 
-        @Override
-        public void received(Success response) {
-          setInitialBreakpointsAndResume(isolateRef);
-        }
-      };
-      addRequest(() -> myVmService.setIsolatePauseMode(isolateId, mode, false, sipmc));
-    }
-    else {
-      SetExceptionPauseModeConsumer wrapper = new SetExceptionPauseModeConsumer() {
-        @Override
-        public void onError(RPCError error) {
-        }
-
-        @Override
-        public void received(Sentinel response) {
-        }
-
-        @Override
-        public void received(Success response) {
-          setInitialBreakpointsAndResume(isolateRef);
-        }
-      };
-      //noinspection deprecation
-      addRequest(() -> myVmService.setExceptionPauseMode(isolateId, mode, wrapper));
-    }
+      @Override
+      public void received(Success response) {
+        setInitialBreakpointsAndResume(isolateRef);
+      }
+    };
+    addRequest(() -> myVmService.setIsolatePauseMode(isolateId, mode, false, sipmc));
   }
 
   public void attachIsolate(@NotNull IsolateRef isolateRef) {
@@ -467,84 +432,6 @@ public class VmServiceWrapper implements Disposable {
   public void addBreakpoint(@NotNull String isolateId,
                             @Nullable XSourcePosition position,
                             @NotNull VmServiceConsumers.BreakpointsConsumer consumer) {
-    myVmService.getVersion(new VersionConsumer() {
-      @Override
-      public void received(org.dartlang.vm.service.element.Version response) {
-        if (isVmServiceMappingSupported(response)) {
-          addBreakpointWithVmService(isolateId, position, consumer);
-        }
-        else {
-          addBreakpointWithMapper(isolateId, position, consumer);
-        }
-      }
-
-      @Override
-      public void onError(RPCError error) {
-        addBreakpointWithMapper(isolateId, position, consumer);
-      }
-    });
-  }
-
-  private boolean isVmServiceMappingSupported(org.dartlang.vm.service.element.Version version) {
-    assert version != null;
-
-    return VmServiceVersion.hasMapping(version);
-  }
-
-  // This is the old way of mapping breakpoints, which uses analyzer.
-  public void addBreakpointWithMapper(@NotNull String isolateId,
-                                      @Nullable XSourcePosition position,
-                                      @NotNull VmServiceConsumers.BreakpointsConsumer consumer) {
-    if (position == null || position.getFile().getFileType() != DartFileType.INSTANCE) {
-      consumer.sourcePositionNotApplicable();
-      return;
-    }
-
-    addRequest(() -> {
-      int line = position.getLine() + 1;
-
-      Collection<String> scriptUris = myDebugProcess.getUrisForFile(position.getFile());
-      CanonicalBreakpoint canonicalBreakpoint =
-        new CanonicalBreakpoint(position.getFile().getName(), position.getFile().getCanonicalPath(), line);
-      canonicalBreakpoints.add(canonicalBreakpoint);
-      List<Breakpoint> breakpointResponses = new ArrayList<>();
-      List<RPCError> errorResponses = new ArrayList<>();
-
-      for (String uri : scriptUris) {
-        myVmService.addBreakpointWithScriptUri(isolateId, uri, line, new AddBreakpointWithScriptUriConsumer() {
-          @Override
-          public void received(Breakpoint response) {
-            breakpointResponses.add(response);
-            breakpointNumbersToCanonicalMap.put(response.getBreakpointNumber(), canonicalBreakpoint);
-
-            checkDone();
-          }
-
-          @Override
-          public void received(Sentinel response) {
-            checkDone();
-          }
-
-          @Override
-          public void onError(RPCError error) {
-            errorResponses.add(error);
-
-            checkDone();
-          }
-
-          private void checkDone() {
-            if (scriptUris.size() == breakpointResponses.size() + errorResponses.size()) {
-              consumer.received(breakpointResponses, errorResponses);
-            }
-          }
-        });
-      }
-    });
-  }
-
-  public void addBreakpointWithVmService(@NotNull String isolateId,
-                                         @Nullable XSourcePosition position,
-                                         @NotNull VmServiceConsumers.BreakpointsConsumer consumer) {
     if (position == null || position.getFile().getFileType() != DartFileType.INSTANCE) {
       consumer.sourcePositionNotApplicable();
       return;
@@ -554,7 +441,7 @@ public class VmServiceWrapper implements Disposable {
       int line = position.getLine() + 1;
 
       String resolvedUri = getResolvedUri(position);
-      if (FlutterSettings.getInstance().isFilePathLoggingEnabled()) LOG.info("Computed resolvedUri: " + resolvedUri);
+      PluginLogger.infoFilePath(LOG, () -> "Computed resolvedUri: " + resolvedUri);
       List<String> resolvedUriList = List.of(percentEscapeUri(resolvedUri));
 
       CanonicalBreakpoint canonicalBreakpoint =
@@ -628,7 +515,7 @@ public class VmServiceWrapper implements Disposable {
     VirtualFile file = position.getFile().getCanonicalFile();
     assert file != null;
     String url = file.getUrl();
-    if (FlutterSettings.getInstance().isFilePathLoggingEnabled())  LOG.info("in getResolvedUri. url: " + url);
+    PluginLogger.infoFilePath(LOG, () -> "in getResolvedUri. url: " + url);
 
     if (SystemInfo.isWindows) {
       // Dart and the VM service use three /'s in file URIs: https://api.dart.dev/stable/2.16.1/dart-core/Uri-class.html.
@@ -715,38 +602,21 @@ public class VmServiceWrapper implements Disposable {
   }
 
   public void setExceptionPauseMode(@NotNull ExceptionPauseMode mode) {
+    SetIsolatePauseModeConsumer consumer = new SetIsolatePauseModeConsumer() {
+      @Override
+      public void onError(RPCError error) {
+      }
+
+      @Override
+      public void received(Sentinel response) {
+      }
+
+      @Override
+      public void received(Success response) {
+      }
+    };
     for (IsolatesInfo.IsolateInfo isolateInfo : myIsolatesInfo.getIsolateInfos()) {
-      if (supportsSetIsolatePauseMode()) {
-        addRequest(() -> myVmService.setIsolatePauseMode(isolateInfo.getIsolateId(), mode, false, new SetIsolatePauseModeConsumer() {
-          @Override
-          public void onError(RPCError error) {
-          }
-
-          @Override
-          public void received(Sentinel response) {
-          }
-
-          @Override
-          public void received(Success response) {
-          }
-        }));
-      }
-      else {
-        //noinspection deprecation
-        addRequest(() -> myVmService.setExceptionPauseMode(isolateInfo.getIsolateId(), mode, new SetExceptionPauseModeConsumer() {
-          @Override
-          public void onError(RPCError error) {
-          }
-
-          @Override
-          public void received(Sentinel response) {
-          }
-
-          @Override
-          public void received(Success response) {
-          }
-        }));
-      }
+      addRequest(() -> myVmService.setIsolatePauseMode(isolateInfo.getIsolateId(), mode, false, consumer));
     }
   }
 
@@ -957,44 +827,6 @@ public class VmServiceWrapper implements Disposable {
                                  @NotNull InvokeConsumer callback) {
     addRequest(() -> myVmService.invoke(isolateId, targetId, methodName, Collections.emptyList(), true, callback));
   }
-
-  public CompletableFuture<String> findResolvedFile(@NotNull String isolateId, @NotNull String scriptUri) {
-    CompletableFuture<String> uriFuture = new CompletableFuture<>();
-    myVmService.lookupResolvedPackageUris(isolateId, List.of(scriptUri), true, new UriListConsumer() {
-      @Override
-      public void received(UriList response) {
-        if (response == null) {
-          LOG.info("lookupResolvedPackageUris returned null response");
-          uriFuture.complete(null);
-          return;
-        }
-
-        List<String> uris = response.getUris();
-        if (uris == null) {
-          LOG.info("lookupResolvedPackageUris returned null uris");
-          uriFuture.complete(null);
-          return;
-        }
-
-        uriFuture.complete(uris.get(0));
-      }
-
-      @Override
-      public void onError(RPCError error) {
-        assert error != null;
-        LOG.info("lookupResolvedPackageUris error: " + error.getMessage());
-
-        uriFuture.complete(null);
-      }
-    });
-
-    return uriFuture;
-  }
-
-  private boolean supportsSetIsolatePauseMode() {
-    org.dartlang.vm.service.element.Version version = myVmService.getRuntimeVersion();
-    return version.getMajor() > 3 || version.getMajor() == 3 && version.getMinor() >= 53;
-  }
 }
 
 class CanonicalBreakpoint {
@@ -1006,14 +838,5 @@ class CanonicalBreakpoint {
     this.fileName = name;
     this.path = path;
     this.line = line;
-  }
-}
-
-class VmServiceVersion {
-  // VM service protocol versions: https://github.com/dart-lang/sdk/blob/master/runtime/vm/service/service.md#revision-history.
-  @NotNull private static Version URI_MAPPING_VERSION = new Version(VmService.versionMajor, VmService.versionMinor, 0);
-
-  public static boolean hasMapping(@NotNull org.dartlang.vm.service.element.Version version) {
-    return (new Version(version.getMajor(), version.getMinor(), 0)).isOrGreaterThan(URI_MAPPING_VERSION.major, URI_MAPPING_VERSION.minor);
   }
 }

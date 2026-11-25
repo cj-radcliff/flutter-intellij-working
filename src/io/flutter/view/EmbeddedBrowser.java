@@ -16,15 +16,22 @@ import com.intellij.ui.components.labels.LinkLabel;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentManager;
 import com.intellij.util.ui.JBUI;
-import io.flutter.devtools.DevToolsUrl;
+import io.flutter.analytics.Analytics;
+import io.flutter.analytics.AnalyticsConstants;
 import io.flutter.utils.AsyncUtils;
 import io.flutter.utils.LabelInput;
 import io.flutter.utils.OpenApiUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import javax.swing.*;
-import java.awt.*;
+import javax.swing.Icon;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import java.awt.BorderLayout;
+import java.awt.GridLayout;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -53,15 +60,19 @@ public abstract class EmbeddedBrowser {
     public @NotNull ContentManager contentManager;
   }
 
-  public static final String ANALYTICS_CATEGORY = "embedded-browser";
-
   protected final Map<@NotNull String, Map<@NotNull String, @NotNull BrowserTab>> windows = new HashMap<>();
 
   public abstract @NotNull Logger logger();
 
+  /** The engine reported in analytics: {@link AnalyticsConstants#ENGINE_JCEF} or {@link AnalyticsConstants#ENGINE_JXBROWSER}. */
+  protected abstract @NotNull String analyticsEngine();
+
+  private final Project project;
+
   private BrowserUrlProvider browserUrlProvider;
 
   public EmbeddedBrowser(Project project) {
+    this.project = project;
     ProjectManager.getInstance().addProjectManagerListener(project, new ProjectManagerListener() {
       @Override
       public void projectClosing(@NotNull Project project) {
@@ -69,15 +80,15 @@ public abstract class EmbeddedBrowser {
           final Map<String, BrowserTab> tabs = windows.get(window);
           for (final String tabName : tabs.keySet()) {
             final BrowserTab tab = tabs.get(tabName);
-              final EmbeddedTab embeddedTab = tab.embeddedTab;
-              if (embeddedTab != null) {
-                try {
-                  embeddedTab.close();
-                }
-                catch (Exception ex) {
-                  logger().info(ex);
-                }
+            final EmbeddedTab embeddedTab = tab.embeddedTab;
+            if (embeddedTab != null) {
+              try {
+                embeddedTab.close();
               }
+              catch (Exception ex) {
+                logger().info(ex);
+              }
+            }
           }
           tabs.clear();
         }
@@ -104,11 +115,13 @@ public abstract class EmbeddedBrowser {
     Map<String, BrowserTab> tabs = windows.computeIfAbsent(toolWindow.getId(), k -> new HashMap<>());
 
     final BrowserTab firstTab = tabs.get(tabName);
-    if (firstTab == null) {
+    final boolean newTab = firstTab == null;
+    if (newTab) {
       try {
         tabs.put(tabName, openBrowserTabFor(tabName, toolWindow));
       }
       catch (Exception ex) {
+        reportOpenPanel(toolWindow, newTab, AnalyticsConstants.REASON_TAB_CREATE_FAILED);
         onBrowserUnavailable.accept(ex.getMessage());
         return;
       }
@@ -132,6 +145,10 @@ public abstract class EmbeddedBrowser {
       tab.embeddedTab.loadUrl(url);
     }
     catch (Exception ex) {
+      // No embedded tab means the engine wasn't ready: JxBrowser is installing, or its install failed or timed out.
+      reportOpenPanel(toolWindow, newTab, tab.embeddedTab == null
+                                          ? AnalyticsConstants.REASON_ENGINE_NOT_READY
+                                          : AnalyticsConstants.REASON_LOAD_FAILED);
       tab.urlFuture.completeExceptionally(ex);
       onBrowserUnavailable.accept(ex.getMessage());
       logger().info(ex);
@@ -142,6 +159,7 @@ public abstract class EmbeddedBrowser {
     tab.urlFuture.complete(browserUrlProvider);
 
     JComponent component = tab.embeddedTab.getTabComponent(tab.contentManager);
+    reportOpenPanel(toolWindow, newTab, null);
 
     OpenApiUtils.safeInvokeLater(() -> {
       if (tab.contentManager.isDisposed()) {
@@ -179,6 +197,15 @@ public abstract class EmbeddedBrowser {
       tab.contentManager.setSelectedContent(tab.content, true);
       tab.embeddedTab.matchIdeZoom();
     });
+  }
+
+  /** Reports {@code opened} when {@code reason} is null, else {@code failed} with that reason. */
+  private void reportOpenPanel(@NotNull ToolWindow toolWindow, boolean newTab, @Nullable String reason) {
+    Analytics.reportEmbeddedBrowser(project,
+                                    reason == null
+                                    ? AnalyticsConstants.EMBEDDED_BROWSER_OPENED
+                                    : AnalyticsConstants.EMBEDDED_BROWSER_FAILED,
+                                    analyticsEngine(), toolWindow.getId(), newTab, reason);
   }
 
   private void openLinkInStandardBrowser(@NotNull ContentManager contentManager) {
